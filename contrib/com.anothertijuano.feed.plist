@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  macOS LaunchAgent template. Replace /Users/USERNAME with your home
+  directory (launchd does NOT expand ~) and adjust the flags. Then:
+
+    cp com.anothertijuano.feed.plist ~/Library/LaunchAgents/
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.anothertijuano.feed.plist
+
+  NOTE: keep the log files on the internal disk. If StandardOutPath /
+  StandardErrorPath point at an external volume, launchd refuses to spawn
+  the job ("last exit code = 78").
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.anothertijuano.feed</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/USERNAME/go/bin/feed</string>
+        <string>-data</string>
+        <string>/Users/USERNAME/srv/feed/data</string>
+        <string>-htpasswd</string>
+        <string>/Users/USERNAME/srv/feed/htpasswd</string>
+        <string>-addr</string>
+        <string>:8084</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+    <key>ProcessType</key>
+    <string>Background</string>
+    <key>StandardOutPath</key>
+    <string>/Users/USERNAME/Library/Logs/com.anothertijuano.feed.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/USERNAME/Library/Logs/com.anothertijuano.feed.log</string>
+</dict>
+</plist>

@@ -121,6 +121,29 @@ Download the new binary from the releases page and replace the old one.
 Your data (votes, subscriptions, saved items) lives in the `-data`
 directory and is preserved across upgrades.
 
+## Run as a macOS service
+
+A LaunchAgent template lives in [`contrib/`](contrib/). Edit the paths
+(launchd does not expand `~`), then:
+
+```sh
+cp contrib/com.anothertijuano.feed.plist ~/Library/LaunchAgents/
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.anothertijuano.feed.plist
+```
+
+The agent starts at login and restarts automatically (`KeepAlive`). Logs go
+to `~/Library/Logs/com.anothertijuano.feed.log`. Useful commands:
+
+```sh
+launchctl kickstart -k gui/$(id -u)/com.anothertijuano.feed   # restart
+launchctl bootout    gui/$(id -u)/com.anothertijuano.feed     # stop + unload
+```
+
+Notes: keep the log paths on the internal disk (launchd refuses to spawn
+jobs whose logs live on an external volume), and make sure the `-data`
+directory is on an always-mounted volume. To run before login instead,
+install the plist in `/Library/LaunchDaemons/` with a `UserName` key.
+
 ## For developers
 
 - [API reference](docs/API.md) — endpoints for third-party clients
