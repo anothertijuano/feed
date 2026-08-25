@@ -1,0 +1,8 @@
+# build artifacts
+/feed
+/feed.exe
+/feed-linux-amd64
+/feed-linux-arm64
+
+# runtime data written at runtime
+/data/
