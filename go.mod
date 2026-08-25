@@ -1,4 +1,4 @@
-module feed2
+module github.com/anothertijuano/feed
 
 go 1.25.0
 
