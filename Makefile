@@ -1,12 +1,16 @@
 # feed. — build & run targets
 
 BIN     := feed
+PREFIX  ?= /usr/local
 LDFLAGS := -s -w
 
-.PHONY: build test vet run clean gen-vapid
+.PHONY: build install test vet run clean gen-vapid
 
 build:
 	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN) .
+
+install: build
+	install -m 0755 $(BIN) $(PREFIX)/bin/$(BIN)
 
 # Cross-compile for common self-hosting targets.
 linux-amd64:
