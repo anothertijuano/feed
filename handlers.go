@@ -43,6 +43,7 @@ type api struct {
 	push      *PushStore
 	vapid     *VAPID
 	notifier  *Notifier
+	tokens    *TokenStore
 	ht        *Htpasswd
 
 	log    *slog.Logger
@@ -67,6 +68,9 @@ func (a *api) routes() http.Handler {
 	mux.HandleFunc("GET /api/push/key", a.pushKey)
 	mux.HandleFunc("POST /api/push/subscribe", a.pushSubscribe)
 	mux.HandleFunc("DELETE /api/push/unsubscribe", a.pushUnsubscribe)
+	mux.HandleFunc("GET /api/tokens", a.getTokens)
+	mux.HandleFunc("POST /api/tokens", a.postToken)
+	mux.HandleFunc("DELETE /api/tokens/{id}", a.deleteToken)
 
 	mux.Handle("/", http.FileServerFS(frontendFS))
 	return mux
@@ -393,6 +397,53 @@ func (a *api) pushUnsubscribe(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+/* ---------- access tokens ---------- */
+
+// getTokens lists access tokens (the token itself is never returned).
+func (a *api) getTokens(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{"items": a.tokens.List()})
+}
+
+// postToken creates an access token. The raw token is returned exactly
+// once, here.
+func (a *api) postToken(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body: "+err.Error())
+		return
+	}
+	req.Name = strings.TrimSpace(req.Name)
+	if req.Name == "" {
+		writeError(w, http.StatusBadRequest, "name is required")
+		return
+	}
+	raw, t, err := a.tokens.Create(req.Name)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	a.log.Info("access token created", "name", t.Name, "id", t.ID)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"token":     raw,
+		"id":        t.ID,
+		"name":      t.Name,
+		"createdAt": t.CreatedAt,
+	})
+}
+
+// deleteToken revokes an access token.
+func (a *api) deleteToken(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if err := a.tokens.Remove(id); err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	a.log.Info("access token revoked", "id", id)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 

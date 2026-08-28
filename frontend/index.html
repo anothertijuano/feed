@@ -9,7 +9,7 @@
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" href="/icons/favicon.svg" type="image/svg+xml">
   <link rel="icon" href="/icons/favicon.ico" sizes="32x32">
-  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="feed.">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -76,6 +76,22 @@
         <button type="button" id="push-disable" class="btn ghost" hidden>Disable notifications</button>
       </div>
       <p class="hint">High-rank articles notify you automatically. Per-source rules live in the Subs tab.</p>
+
+      <h2 class="settings-sub">Access tokens</h2>
+      <div class="settings-form">
+        <p class="hint" style="margin:0">Each client signs in with its own token. Tokens are shown only once.</p>
+        <div id="tokens-list" class="subs-list" style="padding:0"></div>
+        <form id="token-form" class="sub-form" style="padding:0">
+          <input type="text" id="token-name" placeholder="Token name (e.g. iPhone)" required autocomplete="off" spellcheck="false">
+          <button type="submit" class="btn primary">Create</button>
+        </form>
+        <p id="token-reveal" class="memo-status" hidden></p>
+      </div>
+
+      <h2 class="settings-sub">Session</h2>
+      <div class="settings-form">
+        <button type="button" id="sign-out" class="btn ghost">Sign out</button>
+      </div>
     </section>
   </main>
 
@@ -97,6 +113,17 @@
       <span>Settings</span>
     </a>
   </nav>
+
+  <div id="login" class="login" hidden>
+    <div class="login-card">
+      <span class="brand">feed<span class="brand-dot">.</span></span>
+      <p class="login-hint">Enter an access token to continue. Create one in Settings, or on the server with <code>feed -gen-token</code>.</p>
+      <input type="password" id="login-token" placeholder="Access token"
+             autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go">
+      <button type="button" id="login-btn" class="btn primary">Sign in</button>
+      <p id="login-error" class="login-error" hidden>Invalid token</p>
+    </div>
+  </div>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 

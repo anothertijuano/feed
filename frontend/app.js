@@ -23,6 +23,18 @@ const MEMO_STATUS = document.getElementById('memo-status');
 const PUSH_STATUS = document.getElementById('push-status');
 const PUSH_ENABLE = document.getElementById('push-enable');
 const PUSH_DISABLE = document.getElementById('push-disable');
+const LOGIN = document.getElementById('login');
+const LOGIN_TOKEN = document.getElementById('login-token');
+const LOGIN_BTN = document.getElementById('login-btn');
+const LOGIN_ERROR = document.getElementById('login-error');
+const TOKENS_LIST = document.getElementById('tokens-list');
+const TOKEN_FORM = document.getElementById('token-form');
+const TOKEN_NAME = document.getElementById('token-name');
+const TOKEN_REVEAL = document.getElementById('token-reveal');
+const SIGN_OUT = document.getElementById('sign-out');
+
+const TOKEN_KEY = 'feed2:token';
+let authToken = localStorage.getItem(TOKEN_KEY) || '';
 
 const PAGE = 20;
 
@@ -40,10 +52,15 @@ const iconSVG = name =>
 /* ---------- api ---------- */
 
 async function api(path, options = {}) {
-  const res = await fetch(path, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  });
+  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+  if (authToken) headers.Authorization = `Bearer ${authToken}`;
+  const res = await fetch(path, { ...options, headers });
+  if (res.status === 401) {
+    authToken = '';
+    localStorage.removeItem(TOKEN_KEY);
+    showLogin();
+    throw new Error('Authentication required');
+  }
   if (!res.ok) {
     let msg = `HTTP ${res.status}`;
     try {
@@ -673,7 +690,110 @@ async function disablePush() {
 PUSH_ENABLE.addEventListener('click', enablePush);
 PUSH_DISABLE.addEventListener('click', disablePush);
 
-/* ---------- toast ---------- */
+/* ---------- authentication ---------- */
+
+function showLogin() {
+  LOGIN.hidden = false;
+  setTimeout(() => LOGIN_TOKEN.focus(), 50);
+}
+
+function hideLogin() {
+  LOGIN.hidden = true;
+}
+
+async function signIn() {
+  const token = LOGIN_TOKEN.value.trim();
+  if (!token) return;
+  LOGIN_BTN.disabled = true;
+  try {
+    const res = await fetch('/api/feed?limit=1', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      authToken = token;
+      localStorage.setItem(TOKEN_KEY, token);
+      LOGIN_TOKEN.value = '';
+      LOGIN_ERROR.hidden = true;
+      hideLogin();
+      showToast('Signed in');
+      if (currentView === 'feed') loadFeed(true);
+      else route();
+    } else {
+      LOGIN_ERROR.hidden = false;
+    }
+  } catch (err) {
+    LOGIN_ERROR.hidden = false;
+  } finally {
+    LOGIN_BTN.disabled = false;
+  }
+}
+
+LOGIN_BTN.addEventListener('click', signIn);
+LOGIN_TOKEN.addEventListener('keydown', e => {
+  if (e.key === 'Enter') signIn();
+});
+
+SIGN_OUT.addEventListener('click', () => {
+  authToken = '';
+  localStorage.removeItem(TOKEN_KEY);
+  showToast('Signed out');
+  showLogin();
+});
+
+/* ---------- access tokens ---------- */
+
+function tokenRow(t) {
+  const row = document.createElement('div');
+  row.className = 'sub';
+  row.innerHTML = `
+    <div class="sub-info">
+      <div class="sub-title">${esc(t.name)}</div>
+      <div class="sub-url">created ${timeAgo(t.createdAt)}</div>
+    </div>
+    <button type="button" class="icon-btn" data-tok-del="${esc(t.id)}" aria-label="Revoke token">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+    </button>`;
+  return row;
+}
+
+async function loadTokens() {
+  try {
+    const data = await getJSON('/api/tokens');
+    TOKENS_LIST.replaceChildren();
+    for (const t of data.items || []) TOKENS_LIST.appendChild(tokenRow(t));
+  } catch (err) {
+    TOKENS_LIST.replaceChildren(emptyMsg('Could not load tokens.'));
+  }
+}
+
+TOKENS_LIST.addEventListener('click', async event => {
+  const btn = event.target.closest('[data-tok-del]');
+  if (!btn) return;
+  try {
+    await deleteJSON(`/api/tokens/${encodeURIComponent(btn.dataset.tokDel)}`);
+    showToast('Token revoked');
+    loadTokens();
+  } catch (err) {
+    showToast('Could not revoke token');
+  }
+});
+
+TOKEN_FORM.addEventListener('submit', async event => {
+  event.preventDefault();
+  const name = TOKEN_NAME.value.trim();
+  if (!name) return;
+  try {
+    const res = await postJSON('/api/tokens', { name });
+    TOKEN_NAME.value = '';
+    TOKEN_REVEAL.textContent = `New token (shown once): ${res.token}`;
+    TOKEN_REVEAL.classList.remove('error');
+    TOKEN_REVEAL.hidden = false;
+    showToast('Token created — copy it now');
+    loadTokens();
+  } catch (err) {
+    showToast(err.message || 'Could not create token');
+  }
+});
 
 let toastTimer = 0;
 
@@ -705,6 +825,7 @@ function route() {
   else if (view === 'subs') loadSubs();
   else if (view === 'settings') {
     loadSettings();
+    loadTokens();
     updatePushUI();
   }
 

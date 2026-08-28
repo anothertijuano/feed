@@ -113,37 +113,58 @@ func (h *Htpasswd) Check(user, pass string) bool {
 	}
 }
 
-// requireBasicAuth wraps a handler with HTTP Basic authentication.
-// Static PWA plumbing (manifest, service worker, icons) stays public so
-// the browser can fetch it outside the authenticated page context; it
-// contains no data. Everything else requires credentials.
-func requireBasicAuth(ht *Htpasswd, realm string, next http.Handler) http.Handler {
+// requireAuth wraps a handler with authentication: Bearer access tokens
+// (created in Settings or with -gen-token) and, optionally, htpasswd Basic
+// credentials. The UI shell — everything outside /api/ — stays public so
+// the PWA can always load and show its own sign-in screen (Basic auth
+// cannot be re-entered from an installed iOS PWA). /api/health is public
+// for uptime monitors. When no auth is configured at all (no htpasswd and
+// no tokens), the API is open — convenient for local development.
+func requireAuth(ht *Htpasswd, tokens *TokenStore, realm string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if isPublicPath(r.URL.Path) {
+		if isPublicPath(r.URL.Path) || !authConfigured(ht, tokens) {
 			next.ServeHTTP(w, r)
 			return
 		}
-		user, pass, ok := r.BasicAuth()
-		if !ok || !ht.Check(user, pass) {
-			w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Basic realm=%q, charset="UTF-8"`, realm))
-			writeError(w, http.StatusUnauthorized, "authentication required")
-			return
+
+		// Bearer token.
+		if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
+			if tokens.Verify(strings.TrimSpace(strings.TrimPrefix(auth, "Bearer "))) {
+				next.ServeHTTP(w, r)
+				return
+			}
 		}
-		next.ServeHTTP(w, r)
+
+		// htpasswd Basic credentials.
+		if ht != nil {
+			user, pass, ok := r.BasicAuth()
+			if ok && ht.Check(user, pass) {
+				next.ServeHTTP(w, r)
+				return
+			}
+		}
+
+		w.Header().Add("WWW-Authenticate", fmt.Sprintf(`Bearer realm=%q`, realm))
+		if ht != nil {
+			w.Header().Add("WWW-Authenticate", fmt.Sprintf(`Basic realm=%q, charset="UTF-8"`, realm))
+		}
+		writeError(w, http.StatusUnauthorized, "authentication required")
 	})
 }
 
-// isPublicPath lists the paths served without authentication.
+// isPublicPath reports whether a path is served without authentication.
 func isPublicPath(path string) bool {
-	switch {
-	case path == "/api/health": // uptime monitors
-		return true
-	case path == "/manifest.json", path == "/sw.js":
-		return true
-	case strings.HasPrefix(path, "/icons/"):
+	if path == "/api/health" {
 		return true
 	}
-	return false
+	return !strings.HasPrefix(path, "/api/")
+}
+
+// authConfigured reports whether any authentication is in effect. Once a
+// token store has ever been written (or htpasswd is set), auth stays
+// enforced even if all tokens are later revoked.
+func authConfigured(ht *Htpasswd, tokens *TokenStore) bool {
+	return ht != nil || tokens.Enforced()
 }
 
 // corsMiddleware adds permissive CORS headers so third-party web clients

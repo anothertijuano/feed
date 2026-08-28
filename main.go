@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 )
@@ -39,6 +40,7 @@ func main() {
 		notifyAge     = flag.Duration("notify-age", 48*time.Hour, "max item age eligible for push notifications")
 		vapidSubject  = flag.String("vapid-subject", "mailto:admin@localhost", "VAPID JWT subject (an email or URL)")
 		genVapid      = flag.Bool("gen-vapid", false, "print a VAPID key pair and exit")
+		genToken      = flag.String("gen-token", "", "create an access token with the given name, print it once, and exit")
 	)
 	flag.Parse()
 
@@ -51,6 +53,22 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Printf("vapid-public:  %s\nvapid-private: %s\n", pub, priv)
+		return
+	}
+
+	if *genToken != "" {
+		store, err := OpenTokenStore(filepath.Join(*data, "tokens.json"))
+		if err != nil {
+			logger.Error("open token store", "err", err)
+			os.Exit(1)
+		}
+		raw, t, err := store.Create(*genToken)
+		if err != nil {
+			logger.Error("create token", "err", err)
+			os.Exit(1)
+		}
+		fmt.Printf("token:   %s\nname:    %s\ncreated: %s\n", raw, t.Name, t.CreatedAt)
+		fmt.Println("store this token securely — it is shown only once")
 		return
 	}
 

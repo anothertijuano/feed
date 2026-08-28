@@ -493,6 +493,65 @@ func TestSubscriptionNotifyPolicy(t *testing.T) {
 	}
 }
 
+func TestTokenAPI(t *testing.T) {
+	a, cancel := newTestApp(t)
+	defer cancel()
+
+	// With no auth configured the API is open.
+	rec := doJSON(t, a.routes(), http.MethodGet, "/api/feed", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (open)", rec.Code)
+	}
+
+	// Create a token through the API (still open until tokens exist).
+	rec = doJSON(t, a.routes(), http.MethodPost, "/api/tokens", `{"name":"iphone"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body: %s", rec.Code, rec.Body)
+	}
+	var created struct {
+		Token string `json:"token"`
+		ID    string `json:"id"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	if created.Token == "" || created.ID == "" {
+		t.Fatalf("created = %+v", created)
+	}
+
+	// Now that a token exists, auth is enforced.
+	wrapped := a.wrappedRoutes()
+	rec = doJSON(t, wrapped, http.MethodGet, "/api/feed", "")
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401 after token created", rec.Code)
+	}
+
+	authed := func(path string, token string) int {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+		out := httptest.NewRecorder()
+		wrapped.ServeHTTP(out, req)
+		return out.Code
+	}
+	if got := authed("/api/feed", created.Token); got != http.StatusOK {
+		t.Fatalf("authed status = %d, want 200", got)
+	}
+
+	// Revoke it → 401 again.
+	revoke := httptest.NewRequest(http.MethodDelete, "/api/tokens/"+created.ID, nil)
+	revoke.Header.Set("Authorization", "Bearer "+created.Token)
+	rec = httptest.NewRecorder()
+	wrapped.ServeHTTP(rec, revoke)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("revoke status = %d; body: %s", rec.Code, rec.Body)
+	}
+	if got := authed("/api/feed", created.Token); got != http.StatusUnauthorized {
+		t.Fatalf("revoked status = %d, want 401", got)
+	}
+}
+
 func TestPostInvalid(t *testing.T) {
 	cases := []struct {
 		name string

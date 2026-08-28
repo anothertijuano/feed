@@ -18,6 +18,7 @@ data/
   push.json           — Web Push subscriptions
   notified.json       — already-notified article IDs
   vapid.json          — VAPID key pair (mode 0600)
+  tokens.json         — access-token hashes (mode 0600)
   items/<id>.json     — one file per content item
 ```
 

@@ -53,6 +53,10 @@ func newAPI(opts appOptions) (*api, error) {
 	if err != nil {
 		return nil, err
 	}
+	tokens, err := OpenTokenStore(filepath.Join(dir, "tokens.json"))
+	if err != nil {
+		return nil, err
+	}
 	notified, err := OpenNotifiedStore(filepath.Join(dir, "notified.json"))
 	if err != nil {
 		return nil, err
@@ -103,6 +107,7 @@ func newAPI(opts appOptions) (*api, error) {
 		push:      push,
 		vapid:     vapid,
 		notifier:  notifier,
+		tokens:    tokens,
 		ht:        ht,
 		log:       opts.log,
 		client:    client,
@@ -172,12 +177,10 @@ func (a *api) Run(ctx context.Context) error {
 	return err
 }
 
-// wrappedRoutes applies middleware: logging ← CORS ← basic auth ← routes.
+// wrappedRoutes applies middleware: logging ← CORS ← auth ← routes.
 func (a *api) wrappedRoutes() http.Handler {
 	var h http.Handler = a.routes()
-	if a.ht != nil {
-		h = requireBasicAuth(a.ht, "feed", h)
-	}
+	h = requireAuth(a.ht, a.tokens, "feed", h)
 	h = corsMiddleware(h)
 	return logRequests(a.log, h)
 }

@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/sha1"
 	"encoding/base64"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -86,9 +85,17 @@ func TestHtpasswdHotReload(t *testing.T) {
 	}
 }
 
-func TestBasicAuthMiddleware(t *testing.T) {
+func TestAuthMiddleware(t *testing.T) {
 	bcryptHash, _ := bcrypt.GenerateFromPassword([]byte("hunter2"), bcrypt.MinCost)
 	h, err := LoadHtpasswd(writeHtpasswd(t, []string{"admin:" + string(bcryptHash)}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tokens, err := OpenTokenStore(filepath.Join(t.TempDir(), "tokens.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _, err := tokens.Create("test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,59 +107,76 @@ func TestBasicAuthMiddleware(t *testing.T) {
 	mux.HandleFunc("GET /api/feed", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	mux.HandleFunc("GET /sw.js", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
 	mux.HandleFunc("GET /manifest.json", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	mux.HandleFunc("GET /icons/icon-192.png", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	handler := requireBasicAuth(h, "feed", mux)
+	handler := requireAuth(h, tokens, "feed", mux)
 
-	// No credentials → 401 with WWW-Authenticate.
+	get := func(path string, mutate func(*http.Request)) int {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		if mutate != nil {
+			mutate(req)
+		}
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec.Code
+	}
+
+	// The UI shell is public so the PWA can always load.
+	for _, path := range []string{"/", "/manifest.json", "/api/health"} {
+		if code := get(path, nil); code != http.StatusOK {
+			t.Fatalf("GET %s = %d, want 200 (public)", path, code)
+		}
+	}
+
+	// The API requires credentials.
+	if code := get("/api/feed", nil); code != http.StatusUnauthorized {
+		t.Fatalf("GET /api/feed without auth = %d, want 401", code)
+	}
+
+	// Bearer token.
+	if code := get("/api/feed", func(r *http.Request) {
+		r.Header.Set("Authorization", "Bearer "+raw)
+	}); code != http.StatusOK {
+		t.Fatal("valid bearer token rejected")
+	}
+	if code := get("/api/feed", func(r *http.Request) {
+		r.Header.Set("Authorization", "Bearer ft_deadbeef")
+	}); code != http.StatusUnauthorized {
+		t.Fatal("invalid bearer token accepted")
+	}
+
+	// Basic credentials still work.
+	if code := get("/api/feed", func(r *http.Request) {
+		r.SetBasicAuth("admin", "hunter2")
+	}); code != http.StatusOK {
+		t.Fatal("valid basic credentials rejected")
+	}
+	if code := get("/api/feed", func(r *http.Request) {
+		r.SetBasicAuth("admin", "wrong")
+	}); code != http.StatusUnauthorized {
+		t.Fatal("wrong basic credentials accepted")
+	}
+}
+
+func TestAuthOpenWhenUnconfigured(t *testing.T) {
+	tokens, err := OpenTokenStore(filepath.Join(t.TempDir(), "tokens.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/feed", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := requireAuth(nil, tokens, "feed", mux)
+
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/feed", nil))
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want 401", rec.Code)
-	}
-	if !strings.Contains(rec.Header().Get("WWW-Authenticate"), "Basic") {
-		t.Fatalf("missing WWW-Authenticate header: %q", rec.Header().Get("WWW-Authenticate"))
-	}
-
-	// Wrong password → 401.
-	req := httptest.NewRequest(http.MethodGet, "/api/feed", nil)
-	req.SetBasicAuth("admin", "wrong")
-	rec = httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want 401", rec.Code)
-	}
-
-	// Correct credentials → 200.
-	req = httptest.NewRequest(http.MethodGet, "/api/feed", nil)
-	req.SetBasicAuth("admin", "hunter2")
-	rec = httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", rec.Code)
-	}
-
-	// /api/health is exempt.
-	rec = httptest.NewRecorder()
-	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/health", nil))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("health status = %d, want 200", rec.Code)
-	}
-
-	// PWA plumbing (manifest, service worker, icons) is exempt.
-	for _, path := range []string{"/manifest.json", "/sw.js", "/icons/icon-192.png"} {
-		rec = httptest.NewRecorder()
-		handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
-		if rec.Code != http.StatusOK {
-			t.Fatalf("path %s status = %d, want 200 (public)", path, rec.Code)
-		}
+		t.Fatalf("status = %d, want 200 (open when nothing is configured)", rec.Code)
 	}
 }
 
@@ -181,5 +205,3 @@ func TestCORSMiddleware(t *testing.T) {
 		t.Fatalf("Allow-Origin = %q", got)
 	}
 }
-
-var _ = fmt.Sprintf // keep fmt if unused in future edits

@@ -1,15 +1,28 @@
 # API
 
-All endpoints speak JSON. When `-htpasswd` is configured, every request
-(except the public paths below) needs HTTP Basic authentication. CORS is
-enabled, so the API is usable from third-party web and native clients.
+All endpoints speak JSON. Authentication: send an access token as
+`Authorization: Bearer <token>` (tokens are created in the app's Settings
+or with `feed -gen-token <name>`). When `-htpasswd` is configured, HTTP
+Basic credentials are accepted as well. CORS is enabled, so the API is
+usable from third-party web and native clients.
 
 ## Public paths (no auth)
 
 | Path | Purpose |
 | --- | --- |
+| `/`, `/index.html`, `/styles.css`, `/app.js`, `/sw.js`, `/manifest.json`, `/icons/*` | the UI shell (no data) — always public so the PWA can show its sign-in screen |
 | `GET /api/health` | liveness for uptime monitors |
-| `GET /manifest.json`, `GET /sw.js`, `GET /icons/*` | static PWA plumbing (no data) |
+
+Note: until the first access token has ever been created (and with no
+htpasswd configured), the API itself is open.
+
+## Access tokens
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/tokens` | list tokens (names, ids, creation times — never the token itself) |
+| `POST` | `/api/tokens` | `{"name":"iPhone"}` → returns `{"token":"ft_…", …}` (the token is shown only this once) |
+| `DELETE` | `/api/tokens/{id}` | revoke a token |
 
 ## Content
 

@@ -88,23 +88,26 @@ ranking. Pull down at the top of the feed (or tap ↻) to refresh.
 | `-notify-age` | `48h` | max article age eligible for notifications |
 | `-vapid-subject` | `mailto:admin@localhost` | VAPID subject (your email/URL) |
 | `-gen-vapid` | *(flag)* | print a VAPID key pair and exit |
+| `-gen-token` | *(flag)* | create an access token with the given name, print it once, and exit |
 
-## Security
+## Security & sign-in
 
-feed. is meant to sit behind your gateway (Caddy, nginx, Traefik) which
-terminates TLS — the service itself speaks plain HTTP.
+feed. works like Memos: **each client signs in with its own access token**
+(`Authorization: Bearer …`). The UI shell is public and shows a sign-in
+screen, so an installed PWA can always re-authenticate — no browser
+credential prompts (which iOS PWAs cannot re-trigger).
 
-```sh
-htpasswd -Bc htpasswd admin        # create credentials
-feed -addr :8000 -htpasswd htpasswd
-```
-
-- bcrypt (`htpasswd -B`), `{SHA}` and plaintext entries are supported; the
-  file is hot-reloaded when it changes.
-- Everything is protected except `/api/health` and the static PWA files
-  (`/manifest.json`, `/sw.js`, `/icons/*`), which hold no data.
-- **Web Push requires HTTPS in the browser**, so make sure your gateway
-  terminates TLS.
+- Create tokens in **Settings → Access tokens** (shown once), or on the
+  server with `feed -gen-token "my iphone"`.
+- Tokens are stored as SHA-256 hashes (`data/tokens.json`, mode 0600) and
+  can be revoked per client.
+- `-htpasswd` is still supported as an additional way in (Basic auth), for
+  gateways and third-party clients.
+- Until the first token is created, the API is open (convenient for first
+  setup); once a token has ever been created, authentication stays
+  enforced even if all tokens are later revoked.
+- The service speaks plain HTTP — TLS is the gateway's job. **Web Push
+  requires HTTPS in the browser**, so the gateway must terminate TLS.
 - VAPID keys are generated into `data/vapid.json` (0600) on first start.
   Set `-vapid-subject` to an email you control.
 
