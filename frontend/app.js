@@ -301,6 +301,8 @@ async function loadFeed(reset) {
       const card = buildCard(it);
       attachMedia(card);
       FEED.insertBefore(card, SENTINEL);
+      // Mark as seen so it sinks below fresh content server-side.
+      postJSON('/api/interactions', { key: it.id, kind: 'seen', value: true }).catch(() => {});
     }
     feedOffset += items.length;
     feedLoaded = true;

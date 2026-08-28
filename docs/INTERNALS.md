@@ -17,6 +17,7 @@ data/
   rank.json           — current relevance ordering
   push.json           — Web Push subscriptions
   notified.json       — already-notified article IDs
+  seen.json           — articles the user has already seen
   vapid.json          — VAPID key pair (mode 0600)
   tokens.json         — access-token hashes (mode 0600)
   items/<id>.json     — one file per content item
@@ -38,6 +39,8 @@ Relevance = source affinity + title-keyword affinity + recency boost.
 - Each upvote moves the item's source and title tokens toward +1 (rate
   0.15); each downvote toward −1.
 - Downvoted content is removed and its link/GUID blocklisted forever.
+- Seen/liked content sinks below fresh content — the feed always leads
+  with articles you have not read yet.
 - The model survives restarts (`model.json`).
 - Push (default policy) fires for items scoring above `-push-threshold`.
 

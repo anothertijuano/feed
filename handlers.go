@@ -44,6 +44,7 @@ type api struct {
 	vapid     *VAPID
 	notifier  *Notifier
 	tokens    *TokenStore
+	seen      *SeenStore
 	ht        *Htpasswd
 
 	log    *slog.Logger
@@ -171,6 +172,19 @@ func (a *api) postInteraction(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusInternalServerError, err.Error())
 				return
 			}
+		}
+	case "seen":
+		var b bool
+		if err := json.Unmarshal(req.Value, &b); err != nil {
+			writeError(w, http.StatusBadRequest, "seen value must be true")
+			return
+		}
+		if b {
+			if err := a.seen.Add(req.Key); err != nil {
+				writeError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			a.ranker.nudge()
 		}
 	case "save":
 		var b bool

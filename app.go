@@ -57,6 +57,10 @@ func newAPI(opts appOptions) (*api, error) {
 	if err != nil {
 		return nil, err
 	}
+	seen, err := OpenSeenStore(filepath.Join(dir, "seen.json"))
+	if err != nil {
+		return nil, err
+	}
 	notified, err := OpenNotifiedStore(filepath.Join(dir, "notified.json"))
 	if err != nil {
 		return nil, err
@@ -79,7 +83,7 @@ func newAPI(opts appOptions) (*api, error) {
 	extractCh := make(chan FetchResult, 32)
 	notifyCh := make(chan struct{}, 1)
 
-	ranker, err := newRanker(items, blocked,
+	ranker, err := newRanker(items, blocked, seen, store,
 		filepath.Join(dir, "model.json"), filepath.Join(dir, "rank.json"),
 		notifyCh, opts.log)
 	if err != nil {
@@ -108,6 +112,7 @@ func newAPI(opts appOptions) (*api, error) {
 		vapid:     vapid,
 		notifier:  notifier,
 		tokens:    tokens,
+		seen:      seen,
 		ht:        ht,
 		log:       opts.log,
 		client:    client,

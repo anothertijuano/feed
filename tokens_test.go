@@ -54,6 +54,50 @@ func TestTokenStoreLifecycle(t *testing.T) {
 	}
 }
 
+func TestTokenStoreHotReload(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "tokens.json")
+	s, err := OpenTokenStore(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Another process (e.g. feed -gen-token) writes a token directly.
+	other, err := OpenTokenStore(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _, err := other.Create("cli")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The running store must pick it up without a restart.
+	if !s.Verify(raw) {
+		t.Fatal("hot reload did not pick up the new token")
+	}
+	if len(s.List()) != 1 {
+		t.Fatalf("list len = %d, want 1", len(s.List()))
+	}
+
+	// Revocation via another process is picked up too.
+	if err := other.Remove(tkID(t, s)); err != nil {
+		t.Fatal(err)
+	}
+	if s.Verify(raw) {
+		t.Fatal("hot reload did not pick up the revocation")
+	}
+}
+
+func tkID(t *testing.T, s *TokenStore) string {
+	t.Helper()
+	list := s.List()
+	if len(list) != 1 {
+		t.Fatalf("expected 1 token, got %d", len(list))
+	}
+	return list[0].ID
+}
+
 func TestTokenStoreMultipleTokens(t *testing.T) {
 	s, err := OpenTokenStore(filepath.Join(t.TempDir(), "tokens.json"))
 	if err != nil {

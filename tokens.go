@@ -26,12 +26,16 @@ type Token struct {
 	CreatedAt string `json:"createdAt"`
 }
 
-// TokenStore persists access tokens (data/tokens.json).
+// TokenStore persists access tokens (data/tokens.json). The file is
+// hot-reloaded when it changes on disk, so tokens created with -gen-token
+// are usable immediately without restarting the service.
 type TokenStore struct {
-	mu     sync.RWMutex
-	path   string
-	tokens map[string]Token
-	exists bool // file ever created → auth stays enforced even if all tokens are revoked
+	mu      sync.RWMutex
+	path    string
+	tokens  map[string]Token
+	exists  bool // file ever created → auth stays enforced even if all tokens are revoked
+	modTime int64
+	size    int64
 }
 
 func OpenTokenStore(path string) (*TokenStore, error) {
@@ -39,15 +43,8 @@ func OpenTokenStore(path string) (*TokenStore, error) {
 	b, err := os.ReadFile(path)
 	switch {
 	case err == nil:
-		s.exists = true
-		var list []Token
-		if err := json.Unmarshal(b, &list); err != nil {
-			return nil, fmt.Errorf("parse %s: %w", path, err)
-		}
-		for _, t := range list {
-			if t.ID != "" && t.Hash != "" {
-				s.tokens[t.ID] = t
-			}
+		if err := s.loadLocked(b); err != nil {
+			return nil, err
 		}
 	case errors.Is(err, os.ErrNotExist):
 		// Start empty; auth is open until the first token is created.
@@ -55,6 +52,50 @@ func OpenTokenStore(path string) (*TokenStore, error) {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
 	return s, nil
+}
+
+// loadLocked replaces the in-memory map with the parsed file content.
+// Caller must hold s.mu.
+func (s *TokenStore) loadLocked(b []byte) error {
+	var list []Token
+	if err := json.Unmarshal(b, &list); err != nil {
+		return fmt.Errorf("parse %s: %w", s.path, err)
+	}
+	m := make(map[string]Token, len(list))
+	for _, t := range list {
+		if t.ID != "" && t.Hash != "" {
+			m[t.ID] = t
+		}
+	}
+	s.tokens = m
+	s.exists = true
+	return nil
+}
+
+// reloadIfChanged re-reads the file when its mtime/size changed. If the
+// file was deleted or is unparseable, the current state is kept.
+func (s *TokenStore) reloadIfChanged() {
+	info, err := os.Stat(s.path)
+	if err != nil {
+		return
+	}
+	s.mu.RLock()
+	same := s.modTime == info.ModTime().UnixNano() && s.size == info.Size()
+	s.mu.RUnlock()
+	if same {
+		return
+	}
+	b, err := os.ReadFile(s.path)
+	if err != nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.loadLocked(b); err != nil {
+		return
+	}
+	s.modTime = info.ModTime().UnixNano()
+	s.size = info.Size()
 }
 
 // newToken returns a fresh random token string ("ft_" + 32 hex chars).
@@ -99,6 +140,7 @@ func (s *TokenStore) Verify(raw string) bool {
 	if raw == "" {
 		return false
 	}
+	s.reloadIfChanged()
 	h := hashToken(raw)
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -112,6 +154,7 @@ func (s *TokenStore) Verify(raw string) bool {
 
 // List returns all tokens (hashes redacted), oldest first.
 func (s *TokenStore) List() []Token {
+	s.reloadIfChanged()
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	out := make([]Token, 0, len(s.tokens))
@@ -170,5 +213,9 @@ func (s *TokenStore) saveLocked() error {
 		return err
 	}
 	s.exists = true
+	if info, err := os.Stat(s.path); err == nil {
+		s.modTime = info.ModTime().UnixNano()
+		s.size = info.Size()
+	}
 	return nil
 }

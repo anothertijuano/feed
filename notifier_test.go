@@ -39,7 +39,15 @@ func newTestNotifier(t *testing.T) (*Notifier, *SubscriptionStore, *Ranker, *Ite
 	if err != nil {
 		t.Fatal(err)
 	}
-	ranker, err := newRanker(items, blocked,
+	seen, err := OpenSeenStore(filepath.Join(dir, "seen.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	votes, err := OpenStore(filepath.Join(dir, "feed.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ranker, err := newRanker(items, blocked, seen, votes,
 		filepath.Join(dir, "model.json"), filepath.Join(dir, "rank.json"),
 		make(chan struct{}, 1), logger)
 	if err != nil {

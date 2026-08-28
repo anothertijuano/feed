@@ -552,6 +552,25 @@ func TestTokenAPI(t *testing.T) {
 	}
 }
 
+func TestSeenSinksItem(t *testing.T) {
+	a, cancel := newTestApp(t)
+	defer cancel()
+
+	addFeedItem(t, a, "old-item", "Old article", "https://example.com/old")
+	addFeedItem(t, a, "new-item", "New article", "https://example.com/new")
+
+	// Mark the old one as seen.
+	rec := doJSON(t, a.routes(), http.MethodPost, "/api/interactions",
+		`{"key":"old-item","kind":"seen","value":true}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body: %s", rec.Code, rec.Body)
+	}
+	waitFor(t, 3*time.Second, func() bool {
+		ranked := a.ranker.Ranked(0, 10)
+		return len(ranked) > 0 && ranked[0].ID == "new-item"
+	})
+}
+
 func TestPostInvalid(t *testing.T) {
 	cases := []struct {
 		name string

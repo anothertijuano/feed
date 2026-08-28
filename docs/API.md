@@ -63,6 +63,7 @@ htpasswd configured), the API itself is open.
 ```json
 {"key": "<item id>", "kind": "vote", "value": -1 | 0 | 1}
 {"key": "<item id>", "kind": "save", "value": true | false}
+{"key": "<item id>", "kind": "seen", "value": true}
 ```
 
 - `vote: 1` upvotes and trains the recommendation model.
@@ -70,6 +71,8 @@ htpasswd configured), the API itself is open.
   forever; any mirrored Memos memo is deleted.
 - `vote: 0` removes an upvote.
 - `save: true` also mirrors the item to the configured Memos instance.
+- `seen: true` marks an article as read; seen/liked content sinks below
+  fresh content in the ranking.
 
 Response:
 

@@ -6,6 +6,7 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -144,6 +145,12 @@ func requireAuth(ht *Htpasswd, tokens *TokenStore, realm string, next http.Handl
 			}
 		}
 
+		slog.Warn("auth failed",
+			"path", r.URL.Path,
+			"remote", r.RemoteAddr,
+			"has_bearer", strings.HasPrefix(r.Header.Get("Authorization"), "Bearer "),
+			"has_basic", r.Header.Get("Authorization") != "" && strings.HasPrefix(r.Header.Get("Authorization"), "Basic "),
+		)
 		w.Header().Add("WWW-Authenticate", fmt.Sprintf(`Bearer realm=%q`, realm))
 		if ht != nil {
 			w.Header().Add("WWW-Authenticate", fmt.Sprintf(`Basic realm=%q, charset="UTF-8"`, realm))

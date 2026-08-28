@@ -19,7 +19,15 @@ func newTestRanker(t *testing.T) (*Ranker, *ItemStore, *BlockStore, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err := newRanker(items, blocked,
+	seen, err := OpenSeenStore(filepath.Join(dir, "seen.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	votes, err := OpenStore(filepath.Join(dir, "feed.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := newRanker(items, blocked, seen, votes,
 		filepath.Join(dir, "model.json"), filepath.Join(dir, "rank.json"),
 		make(chan struct{}, 1), slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
@@ -56,7 +64,7 @@ func TestRankerLikeTrainsAndPersists(t *testing.T) {
 	}
 
 	// The model must survive a reload.
-	reloaded, err := newRanker(items, r.blocked, filepath.Join(dir, "model.json"), filepath.Join(dir, "rank.json"), make(chan struct{}, 1), r.log)
+	reloaded, err := newRanker(items, r.blocked, r.seen, r.votes, filepath.Join(dir, "model.json"), filepath.Join(dir, "rank.json"), make(chan struct{}, 1), r.log)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,6 +91,40 @@ func TestRankerDislikeRemovesBlocksTrains(t *testing.T) {
 	}
 	if got := r.model.Tokens["crypto"]; got >= 0 {
 		t.Fatalf("crypto weight = %v, want < 0", got)
+	}
+}
+
+func TestRankerSinksSeenAndLiked(t *testing.T) {
+	r, items, _, _ := newTestRanker(t)
+
+	putTestItem(t, items, "seen-item", "Seen article", "https://rust.example.com/seen")
+	putTestItem(t, items, "liked-item", "Liked article", "https://rust.example.com/liked")
+	putTestItem(t, items, "fresh-item", "Fresh article", "https://rust.example.com/fresh")
+
+	// Boost the source so score would normally put them on top.
+	r.mu.Lock()
+	r.model.Sources["rust.example.com"] = 0.9
+	r.mu.Unlock()
+
+	if err := r.seen.Add("seen-item"); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.votes.SetVote("liked-item", 1); err != nil {
+		t.Fatal(err)
+	}
+
+	r.rank()
+	ranked := r.Ranked(0, 10)
+	if len(ranked) != 3 {
+		t.Fatalf("ranked = %+v", ranked)
+	}
+	if ranked[0].ID != "fresh-item" {
+		t.Fatalf("top item = %s, want fresh-item", ranked[0].ID)
+	}
+	for _, it := range ranked[1:] {
+		if it.ID == "fresh-item" {
+			t.Fatalf("fresh item duplicated: %+v", ranked)
+		}
 	}
 }
 

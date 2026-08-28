@@ -32,11 +32,14 @@ type rankEntry struct {
 }
 
 // Ranker is the recommendation algorithm: it learns from votes and keeps
-// the feed sorted by relevance. Run as its own goroutine.
+// the feed sorted by relevance. Content the user has already seen or liked
+// sinks below fresh content. Run as its own goroutine.
 type Ranker struct {
 	mu        sync.RWMutex
 	items     *ItemStore
 	blocked   *BlockStore
+	seen      *SeenStore
+	votes     *Store
 	modelPath string
 	rankPath  string
 	model     Model
@@ -45,10 +48,12 @@ type Ranker struct {
 	log       *slog.Logger
 }
 
-func newRanker(items *ItemStore, blocked *BlockStore, modelPath, rankPath string, notify chan struct{}, log *slog.Logger) (*Ranker, error) {
+func newRanker(items *ItemStore, blocked *BlockStore, seen *SeenStore, votes *Store, modelPath, rankPath string, notify chan struct{}, log *slog.Logger) (*Ranker, error) {
 	r := &Ranker{
 		items:     items,
 		blocked:   blocked,
+		seen:      seen,
+		votes:     votes,
 		modelPath: modelPath,
 		rankPath:  rankPath,
 		model: Model{
@@ -186,6 +191,7 @@ func (r *Ranker) score(it Item) float64 {
 }
 
 // rank recomputes the relevance ordering and persists it to rank.json.
+// Seen/liked items sink below fresh content.
 func (r *Ranker) rank() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -194,31 +200,44 @@ func (r *Ranker) rank() {
 		it Item
 		s  float64
 	}
-	items := r.items.All()
-	list := make([]scored, 0, len(items))
-	for _, it := range items {
-		list = append(list, scored{it, r.score(it)})
-	}
-	sort.SliceStable(list, func(i, j int) bool {
-		if list[i].s != list[j].s {
-			return list[i].s > list[j].s
+	fresh := make([]scored, 0)
+	consumed := make([]Item, 0)
+	for _, it := range r.items.All() {
+		if r.votes.Vote(it.ID) == 1 || r.seen.Has(it.ID) {
+			consumed = append(consumed, it)
+		} else {
+			fresh = append(fresh, scored{it, r.score(it)})
 		}
-		return list[i].it.FetchedAt > list[j].it.FetchedAt
+	}
+	sort.SliceStable(fresh, func(i, j int) bool {
+		if fresh[i].s != fresh[j].s {
+			return fresh[i].s > fresh[j].s
+		}
+		return fresh[i].it.FetchedAt > fresh[j].it.FetchedAt
+	})
+	sort.SliceStable(consumed, func(i, j int) bool {
+		return consumed[i].FetchedAt > consumed[j].FetchedAt
 	})
 
-	r.ranked = make([]Item, len(list))
-	entries := make([]rankEntry, len(list))
-	for i, sc := range list {
-		r.ranked[i] = sc.it
-		entries[i] = rankEntry{
+	r.ranked = make([]Item, 0, len(fresh)+len(consumed))
+	entries := make([]rankEntry, 0, len(fresh)+len(consumed))
+	for _, sc := range fresh {
+		r.ranked = append(r.ranked, sc.it)
+		entries = append(entries, rankEntry{
 			ID:    sc.it.ID,
 			Score: math.Round(sc.s*1000) / 1000,
 			Title: sc.it.Title,
-		}
+		})
+	}
+	for _, it := range consumed {
+		r.ranked = append(r.ranked, it)
+		entries = append(entries, rankEntry{ID: it.ID, Score: 0, Title: it.Title})
 	}
 
 	b, err := json.MarshalIndent(map[string]any{
 		"updatedAt": time.Now().UTC().Format(time.RFC3339),
+		"fresh":     len(fresh),
+		"consumed":  len(consumed),
 		"order":     entries,
 	}, "", "  ")
 	if err != nil {
