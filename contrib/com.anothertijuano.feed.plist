@@ -7,9 +7,11 @@
     cp com.anothertijuano.feed.plist ~/Library/LaunchAgents/
     launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.anothertijuano.feed.plist
 
-  NOTE: keep the log files on the internal disk. If StandardOutPath /
-  StandardErrorPath point at an external volume, launchd refuses to spawn
-  the job ("last exit code = 78").
+  NOTE: keep the log files AND the -data/-htpasswd paths on the internal
+  disk. launchd refuses to spawn jobs whose logs live on an external
+  volume, and macOS TCC can silently block or deny a launchd job's access
+  to removable volumes. When upgrading, replace the binary via rm + copy
+  or temp file + mv — never overwrite it in place while running.
 -->
 <plist version="1.0">
 <dict>

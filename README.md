@@ -144,7 +144,12 @@ launchctl bootout    gui/$(id -u)/com.anothertijuano.feed     # stop + unload
 
 Notes: keep the log paths on the internal disk (launchd refuses to spawn
 jobs whose logs live on an external volume), and make sure the `-data`
-directory is on an always-mounted volume. To run before login instead,
+directory is on an always-mounted volume. macOS also gates access to
+removable volumes per binary (TCC): a launchd job opening files on an
+external drive can block or be denied silently — for a server, keep both
+`-data` and `-htpasswd` on the internal disk. When upgrading the binary,
+replace it via `rm` + copy (or temp file + `mv`), never by overwriting it
+in place while the service is running. To run before login instead,
 install the plist in `/Library/LaunchDaemons/` with a `UserName` key.
 
 ## For developers
