@@ -2,7 +2,8 @@
 
 All endpoints speak JSON. Authentication: send an access token as
 `Authorization: Bearer <token>` (tokens are created in the app's Settings
-or with `feed -gen-token <name>`). When `-htpasswd` is configured, HTTP
+or with `feed -gen-token <name> -data <dir>`, where `<dir>` must be the
+service's data directory). When `-htpasswd` is configured, HTTP
 Basic credentials are accepted as well. CORS is enabled, so the API is
 usable from third-party web and native clients.
 

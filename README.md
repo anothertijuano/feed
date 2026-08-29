@@ -91,7 +91,7 @@ ranking. Pull down at the top of the feed (or tap ↻) to refresh.
 | `-max-age` | `120h` | time in the feed before an article is ignored |
 | `-vapid-subject` | `mailto:admin@localhost` | VAPID subject (your email/URL) |
 | `-gen-vapid` | *(flag)* | print a VAPID key pair and exit |
-| `-gen-token` | *(flag)* | create an access token with the given name, print it once, and exit |
+| `-gen-token` | *(flag)* | create an access token with the given name, print it once, and exit (requires `-data`) |
 
 ## Security & sign-in
 
@@ -101,7 +101,10 @@ screen, so an installed PWA can always re-authenticate — no browser
 credential prompts (which iOS PWAs cannot re-trigger).
 
 - Create tokens in **Settings → Access tokens** (shown once), or on the
-  server with `feed -gen-token "my iphone"`.
+  server with `feed -gen-token "my iphone" -data <dir>`. The token is
+  written to `<dir>/tokens.json`, which must be the **same data directory
+  the service runs with** — `-gen-token` refuses to run without `-data`
+  to avoid writing a token somewhere the service never reads.
 - Tokens are stored as SHA-256 hashes (`data/tokens.json`, mode 0600) and
   can be revoked per client.
 - `-htpasswd` is still supported as an additional way in (Basic auth), for

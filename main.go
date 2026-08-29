@@ -60,7 +60,17 @@ func main() {
 	}
 
 	if *genToken != "" {
-		store, err := OpenTokenStore(filepath.Join(*data, "tokens.json"))
+		// -gen-token must know which store to update. Without this check
+		// the default data dir (./data, relative to the cwd) silently
+		// writes a token somewhere the service never reads — the token
+		// then fails with "Invalid token" while the real tokens.json
+		// looks empty.
+		if !flagWasSet("data") {
+			logger.Error("-gen-token requires -data <dir>: the token is written to <dir>/tokens.json, which must be the same data directory the service was started with (e.g. -data '/Users/you/Library/Application Support/feed/data')")
+			os.Exit(2)
+		}
+		path := filepath.Join(*data, "tokens.json")
+		store, err := OpenTokenStore(path)
 		if err != nil {
 			logger.Error("open token store", "err", err)
 			os.Exit(1)
@@ -70,7 +80,7 @@ func main() {
 			logger.Error("create token", "err", err)
 			os.Exit(1)
 		}
-		fmt.Printf("token:   %s\nname:    %s\ncreated: %s\n", raw, t.Name, t.CreatedAt)
+		fmt.Printf("token:   %s\nname:    %s\ncreated: %s\nstored:  %s\n", raw, t.Name, t.CreatedAt, path)
 		fmt.Println("store this token securely — it is shown only once")
 		return
 	}
@@ -100,6 +110,18 @@ func main() {
 		logger.Error("server", "err", err)
 		os.Exit(1)
 	}
+}
+
+// flagWasSet reports whether a flag was explicitly provided on the command
+// line (as opposed to using its default value).
+func flagWasSet(name string) bool {
+	set := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			set = true
+		}
+	})
+	return set
 }
 
 func logRequests(logger *slog.Logger, next http.Handler) http.Handler {
