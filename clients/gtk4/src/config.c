@@ -1,6 +1,7 @@
 #include "config.h"
 
 #include <errno.h>
+#include <sys/stat.h>
 
 #define CONFIG_GROUP "feed"
 
@@ -101,7 +102,7 @@ feed_config_save(FeedConfig *config, GError **error)
     return FALSE;
 
   /* The file holds a token, so keep it private to the user. */
-  if (g_chmod(path, 0600) != 0)
+  if (chmod(path, 0600) != 0)
     g_warning("could not chmod %s to 0600: %s", path, g_strerror(errno));
 
   return TRUE;

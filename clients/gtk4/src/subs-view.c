@@ -198,7 +198,7 @@ on_delete_clicked(GtkButton *button, gpointer data)
     return;
 
   AdwMessageDialog *dialog =
-    adw_message_dialog_new(GTK_WIDGET(self->window),
+    adw_message_dialog_new(GTK_WINDOW(self->window),
                            "Remove subscription?",
                            "The subscription will be removed from the server. "
                            "Already-fetched items stay in your feed.");
@@ -382,7 +382,7 @@ subs_view_add(SubsView *self, const char *url)
 static void
 subs_view_submit_entry(SubsView *self)
 {
-  g_autofree char *url = g_strdup(gtk_entry_get_text(self->add_entry));
+  g_autofree char *url = g_strdup(gtk_editable_get_text(GTK_EDITABLE(self->add_entry)));
   g_strstrip(url);
 
   if (url[0] == '\0') {
@@ -443,7 +443,7 @@ on_add_clicked(GtkButton *button, gpointer data)
   if (self->disposed)
     return;
 
-  gtk_entry_set_text(self->add_entry, "");
+  gtk_editable_set_text(GTK_EDITABLE(self->add_entry), "");
   adw_dialog_present(self->add_dialog, GTK_WIDGET(self));
   gtk_widget_grab_focus(GTK_WIDGET(self->add_entry));
 }
@@ -529,10 +529,11 @@ on_policy_done(FeedApiResponse *response, gpointer data)
 }
 
 static void
-on_delete_chosen(AdwMessageDialog *dialog, GAsyncResult *result,
+on_delete_chosen(GObject *source_object, GAsyncResult *result,
                  gpointer data)
 {
   DeleteConfirm *confirm = data;
+  AdwMessageDialog *dialog = ADW_MESSAGE_DIALOG(source_object);
   const char *response = adw_message_dialog_choose_finish(dialog, result);
   gboolean remove = g_strcmp0(response, "remove") == 0;
 

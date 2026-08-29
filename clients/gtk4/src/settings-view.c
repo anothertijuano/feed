@@ -108,8 +108,10 @@ on_test_clicked(GtkButton *button, gpointer data)
   if (self->disposed)
     return;
 
-  const char *server = adw_entry_row_get_text(self->server_row);
-  const char *token = adw_password_entry_row_get_text(self->token_row);
+  g_autofree char *server = NULL;
+  g_autofree char *token = NULL;
+  g_object_get(self->server_row, "text", &server, NULL);
+  g_object_get(self->token_row, "text", &token, NULL);
 
   FeedApi *api = feed_api_new(server, token);
   if (feed_api_get_server(api) == NULL) {
@@ -124,8 +126,8 @@ on_test_clicked(GtkButton *button, gpointer data)
   test->pending = 2;
 
   feed_window_busy_push(self->window);
-  feed_api_get_health(api, self->cancellable, on_test_health, test);
-  feed_api_get_settings(api, self->cancellable, on_test_settings, test);
+  feed_api_get_health(api, self->cancellable, on_test_health, test, NULL);
+  feed_api_get_settings(api, self->cancellable, on_test_settings, test, NULL);
 }
 
 /* ---------- save ---------- */
@@ -175,10 +177,14 @@ on_save_clicked(GtkButton *button, gpointer data)
   if (self->disposed)
     return;
 
-  char *server = g_strdup(adw_entry_row_get_text(self->server_row));
-  char *token = g_strdup(adw_password_entry_row_get_text(self->token_row));
-  char *memos_url = g_strdup(adw_entry_row_get_text(self->memos_url_row));
-  char *memos_token = g_strdup(adw_password_entry_row_get_text(self->memos_token_row));
+  char *server = NULL;
+  char *token = NULL;
+  char *memos_url = NULL;
+  char *memos_token = NULL;
+  g_object_get(self->server_row, "text", &server, NULL);
+  g_object_get(self->token_row, "text", &token, NULL);
+  g_object_get(self->memos_url_row, "text", &memos_url, NULL);
+  g_object_get(self->memos_token_row, "text", &memos_token, NULL);
   g_strstrip(server);
   g_strstrip(memos_url);
 
@@ -248,19 +254,19 @@ settings_view_constructed(GObject *object)
     "Connection settings for your self-hosted feed server.");
 
   self->server_row = ADW_ENTRY_ROW(adw_entry_row_new());
-  adw_entry_row_set_title(self->server_row, "Server URL");
-  adw_entry_row_set_text(self->server_row, config->server);
+  adw_preferences_row_set_title(ADW_PREFERENCES_ROW(self->server_row), "Server URL");
+  g_object_set(self->server_row, "text", config->server, NULL);
   adw_preferences_group_add(ADW_PREFERENCES_GROUP(server_group),
                             GTK_WIDGET(self->server_row));
 
   self->token_row = ADW_PASSWORD_ENTRY_ROW(adw_password_entry_row_new());
-  adw_password_entry_row_set_title(self->token_row, "API Token");
-  adw_password_entry_row_set_text(self->token_row, config->token);
+  adw_preferences_row_set_title(ADW_PREFERENCES_ROW(self->token_row), "API Token");
+  g_object_set(self->token_row, "text", config->token, NULL);
   adw_preferences_group_add(ADW_PREFERENCES_GROUP(server_group),
                             GTK_WIDGET(self->token_row));
 
   GtkWidget *test_row = adw_action_row_new();
-  adw_action_row_set_title(ADW_ACTION_ROW(test_row), "Connection");
+  adw_preferences_row_set_title(ADW_PREFERENCES_ROW(test_row), "Connection");
   adw_action_row_set_subtitle(ADW_ACTION_ROW(test_row),
     "Check that the server is reachable and the token is valid.");
   GtkWidget *test_button = gtk_button_new_with_label("Test");
@@ -280,14 +286,14 @@ settings_view_constructed(GObject *object)
     "the server.");
 
   self->memos_url_row = ADW_ENTRY_ROW(adw_entry_row_new());
-  adw_entry_row_set_title(self->memos_url_row, "Memos URL");
-  adw_entry_row_set_text(self->memos_url_row, config->memos_url);
+  adw_preferences_row_set_title(ADW_PREFERENCES_ROW(self->memos_url_row), "Memos URL");
+  g_object_set(self->memos_url_row, "text", config->memos_url, NULL);
   adw_preferences_group_add(ADW_PREFERENCES_GROUP(memos_group),
                             GTK_WIDGET(self->memos_url_row));
 
   self->memos_token_row = ADW_PASSWORD_ENTRY_ROW(adw_password_entry_row_new());
-  adw_password_entry_row_set_title(self->memos_token_row, "Memos Token");
-  adw_password_entry_row_set_text(self->memos_token_row, config->memos_token);
+  adw_preferences_row_set_title(ADW_PREFERENCES_ROW(self->memos_token_row), "Memos Token");
+  g_object_set(self->memos_token_row, "text", config->memos_token, NULL);
   adw_preferences_group_add(ADW_PREFERENCES_GROUP(memos_group),
                             GTK_WIDGET(self->memos_token_row));
 
@@ -304,7 +310,7 @@ settings_view_constructed(GObject *object)
                                         config_note);
 
   GtkWidget *save_row = adw_action_row_new();
-  adw_action_row_set_title(ADW_ACTION_ROW(save_row), "Save Settings");
+  adw_preferences_row_set_title(ADW_PREFERENCES_ROW(save_row), "Save Settings");
   GtkWidget *save_button = gtk_button_new_with_label("Save");
   gtk_widget_add_css_class(save_button, "suggested-action");
   g_signal_connect(save_button, "clicked", G_CALLBACK(on_save_clicked), self);

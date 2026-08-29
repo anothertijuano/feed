@@ -378,10 +378,11 @@ on_card_vote(FeedCard *card, gint64 value, gpointer data)
 }
 
 static void
-on_downvote_chosen(AdwMessageDialog *dialog, GAsyncResult *result,
+on_downvote_chosen(GObject *source_object, GAsyncResult *result,
                    gpointer data)
 {
   VoteClosure *confirm = data;
+  AdwMessageDialog *dialog = ADW_MESSAGE_DIALOG(source_object);
   const char *response = adw_message_dialog_choose_finish(dialog, result);
   gboolean remove = g_strcmp0(response, "remove") == 0;
 
@@ -404,7 +405,7 @@ static void
 feed_view_confirm_downvote(FeedView *self, FeedCard *card)
 {
   AdwMessageDialog *dialog =
-    adw_message_dialog_new(GTK_WIDGET(self->window),
+    adw_message_dialog_new(GTK_WINDOW(self->window),
                            "Remove this item from the feed?",
                            "Downvoting deletes the item from the server "
                            "permanently. This cannot be undone.");
