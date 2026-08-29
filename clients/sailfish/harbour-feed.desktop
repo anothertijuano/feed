@@ -5,3 +5,6 @@ Icon=harbour-feed
 Exec=harbour-feed
 Name=feed.
 Comment=Self-hosted ranked feed reader
+
+[X-Sailjail]
+Sandboxing=Disabled
