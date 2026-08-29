@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -569,6 +570,48 @@ func TestSeenSinksItem(t *testing.T) {
 		ranked := a.ranker.Ranked(0, 10)
 		return len(ranked) > 0 && ranked[0].ID == "new-item"
 	})
+}
+
+func TestMigrateFeedEntryTimes(t *testing.T) {
+	dir := t.TempDir()
+	items, err := OpenItemStore(filepath.Join(dir, "items"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := Item{
+		ID:        "r-legacy",
+		Title:     "Legacy",
+		Link:      "https://example.com/legacy",
+		FetchedAt: "2026-01-01T00:00:00Z", // old pubDate, no PublishedAt
+	}
+	if err := items.Put(legacy); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := migrateFeedEntryTimes(items, dir, slog.New(slog.NewTextHandler(io.Discard, nil))); err != nil {
+		t.Fatal(err)
+	}
+
+	got, ok := items.Get("r-legacy")
+	if !ok {
+		t.Fatal("item missing")
+	}
+	if got.PublishedAt != "2026-01-01T00:00:00Z" {
+		t.Fatalf("PublishedAt = %q, want old FetchedAt", got.PublishedAt)
+	}
+	if got.FetchedAt == "2026-01-01T00:00:00Z" {
+		t.Fatal("FetchedAt was not restarted")
+	}
+
+	// A second run must be a no-op.
+	again, _ := items.Get("r-legacy")
+	if err := migrateFeedEntryTimes(items, dir, slog.New(slog.NewTextHandler(io.Discard, nil))); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := items.Get("r-legacy")
+	if again.FetchedAt != after.FetchedAt {
+		t.Fatal("migration ran twice")
+	}
 }
 
 func TestPostInvalid(t *testing.T) {

@@ -103,6 +103,15 @@ func newAPI(opts appOptions) (*api, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// One-time migration: before v1.3, FetchedAt held the publication date
+	// when the feed provided one. It now drives expiration (time in the
+	// feed), so preserve the old value as PublishedAt and count feed-entry
+	// time from this upgrade — otherwise the whole backlog would expire
+	// instantly.
+	if err := migrateFeedEntryTimes(items, dir, opts.log); err != nil {
+		return nil, err
+	}
 	extractor := newExtractor(extractCh, items, subs, blocked, notifyCh, nil, opts.log)
 	fetcher := newFetcher(subs, extractCh, opts.refresh, client, opts.log)
 	memos := newMemos(client, settings, store, opts.log)
@@ -133,6 +142,35 @@ func newAPI(opts appOptions) (*api, error) {
 		addr:      opts.addr,
 	}
 	return a, nil
+}
+
+// migrateFeedEntryTimes migrates items created before v1.3 once: their
+// FetchedAt becomes PublishedAt and the feed-entry time restarts at the
+// migration moment. Gated by a marker file so it runs only once.
+func migrateFeedEntryTimes(items *ItemStore, dir string, log *slog.Logger) error {
+	marker := filepath.Join(dir, ".migrated-feed-entry-time")
+	if _, err := os.Stat(marker); err == nil {
+		return nil
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	count := 0
+	for _, it := range items.All() {
+		if it.PublishedAt != "" {
+			continue
+		}
+		it.PublishedAt = it.FetchedAt
+		it.FetchedAt = now
+		if err := items.Put(it); err == nil {
+			count++
+		}
+	}
+	if err := os.WriteFile(marker, []byte(now), 0o644); err != nil {
+		return err
+	}
+	if count > 0 {
+		log.Info("migrated legacy feed-entry times", "items", count)
+	}
+	return nil
 }
 
 // Run starts the background workers — fetcher, extractor, ranker, notifier
