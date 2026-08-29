@@ -7,30 +7,45 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 )
 
-// SeenStore remembers which item IDs the user has already seen in the
-// feed, so the ranker can sink consumed content below fresh content.
+// seenDedupeWindow: repeated "seen" reports for the same item within this
+// window count as a single presentation (refresh-safe, multi-device-safe).
+const seenDedupeWindow = time.Hour
+
+// SeenStore counts how often each item was presented to the user. Items
+// presented often enough without any reaction (vote/save) expire and are
+// ignored by the ranker. A reaction resets the counter.
 type SeenStore struct {
-	mu    sync.RWMutex
-	path  string
-	order []string
-	set   map[string]bool
+	mu     sync.RWMutex
+	path   string
+	counts map[string]seenEntry
+}
+
+type seenEntry struct {
+	Count  int    `json:"count"`
+	LastAt string `json:"lastAt"`
 }
 
 func OpenSeenStore(path string) (*SeenStore, error) {
-	s := &SeenStore{path: path, set: make(map[string]bool)}
+	s := &SeenStore{path: path, counts: make(map[string]seenEntry)}
 	b, err := os.ReadFile(path)
 	switch {
 	case err == nil:
-		var list []string
-		if err := json.Unmarshal(b, &list); err != nil {
+		// Current format: {"<id>": {"count": n, "lastAt": "…"}}
+		if err := json.Unmarshal(b, &s.counts); err == nil {
+			break
+		}
+		// Legacy format: ["<id>", …] — treat as one presentation each.
+		var legacy []string
+		if err := json.Unmarshal(b, &legacy); err != nil {
 			return nil, fmt.Errorf("parse %s: %w", path, err)
 		}
-		for _, id := range list {
-			s.set[id] = true
+		s.counts = make(map[string]seenEntry, len(legacy))
+		for _, id := range legacy {
+			s.counts[id] = seenEntry{Count: 1, LastAt: time.Now().UTC().Format(time.RFC3339)}
 		}
-		s.order = list
 	case errors.Is(err, os.ErrNotExist):
 		// Start empty.
 	default:
@@ -39,48 +54,38 @@ func OpenSeenStore(path string) (*SeenStore, error) {
 	return s, nil
 }
 
-// Has reports whether the item was seen.
-func (s *SeenStore) Has(id string) bool {
+// Count returns how many times the item was presented.
+func (s *SeenStore) Count(id string) int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.set[id]
+	return s.counts[id].Count
 }
 
-// Add marks an item as seen.
+// Add records a presentation. Reports within the dedupe window of the
+// previous one are ignored, so refreshes and multiple devices don't burn
+// through the presentation budget.
 func (s *SeenStore) Add(id string) error {
+	now := time.Now().UTC()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.set[id] {
-		return nil
-	}
-	s.set[id] = true
-	s.order = append(s.order, id)
-	// Keep the file bounded.
-	if len(s.order) > 10000 {
-		drop := s.order[:len(s.order)-10000]
-		s.order = s.order[len(s.order)-10000:]
-		for _, d := range drop {
-			delete(s.set, d)
+	cur, ok := s.counts[id]
+	if ok {
+		if t, err := time.Parse(time.RFC3339, cur.LastAt); err == nil && now.Sub(t) < seenDedupeWindow {
+			return nil
 		}
 	}
+	s.counts[id] = seenEntry{Count: cur.Count + 1, LastAt: now.Format(time.RFC3339)}
 	return s.saveLocked()
 }
 
-// Remove un-marks an item (e.g. if an un-see is ever needed).
+// Remove resets the presentation counter (a reaction: vote or save).
 func (s *SeenStore) Remove(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if !s.set[id] {
+	if _, ok := s.counts[id]; !ok {
 		return nil
 	}
-	delete(s.set, id)
-	out := s.order[:0]
-	for _, cur := range s.order {
-		if cur != id {
-			out = append(out, cur)
-		}
-	}
-	s.order = out
+	delete(s.counts, id)
 	return s.saveLocked()
 }
 
@@ -88,7 +93,7 @@ func (s *SeenStore) saveLocked() error {
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
 		return err
 	}
-	b, err := json.MarshalIndent(s.order, "", "  ")
+	b, err := json.MarshalIndent(s.counts, "", "  ")
 	if err != nil {
 		return err
 	}

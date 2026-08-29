@@ -34,13 +34,22 @@ data/
 
 ## Ranking
 
-Relevance = source affinity + title-keyword affinity + recency boost.
+The feed is ordered in tiers: fresh → revisits → liked content; expired
+content is ignored.
 
-- Each upvote moves the item's source and title tokens toward +1 (rate
-  0.15); each downvote toward −1.
-- Downvoted content is removed and its link/GUID blocklisted forever.
-- Seen/liked content sinks below fresh content — the feed always leads
-  with articles you have not read yet.
+- **Relevance** = source affinity + title-keyword affinity + recency boost,
+  plus a small deterministic day-seeded jitter so the order isn't a pure
+  function of the model (stable within a day).
+- **Diversity**: no source contributes more than `-max-per-source` articles
+  to the diversified top of the feed; the overflow lands below it.
+- **Training**: each upvote moves the item's source and title tokens toward
+  +1 (rate 0.15); each downvote toward −1. Downvoted content is removed
+  and its link/GUID blocklisted forever.
+- **Seen**: articles the user has seen sink below fresh content. A vote or
+  save counts as a reaction and resets the counter.
+- **Expiry**: an article presented `-max-presents` times without a reaction
+  (presentations are deduped per hour), or in the feed longer than
+  `-max-age` (5 days by default), is marked read and ignored.
 - The model survives restarts (`model.json`).
 - Push (default policy) fires for items scoring above `-push-threshold`.
 

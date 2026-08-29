@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -32,23 +34,28 @@ type rankEntry struct {
 }
 
 // Ranker is the recommendation algorithm: it learns from votes and keeps
-// the feed sorted by relevance. Content the user has already seen or liked
-// sinks below fresh content. Run as its own goroutine.
+// the feed sorted by relevance. Content the user has seen or liked sinks
+// below fresh content; content that has been presented too many times
+// without a reaction, or has been in the feed too long, expires and is
+// ignored. Run as its own goroutine.
 type Ranker struct {
-	mu        sync.RWMutex
-	items     *ItemStore
-	blocked   *BlockStore
-	seen      *SeenStore
-	votes     *Store
-	modelPath string
-	rankPath  string
-	model     Model
-	ranked    []Item
-	notify    chan struct{}
-	log       *slog.Logger
+	mu           sync.RWMutex
+	items        *ItemStore
+	blocked      *BlockStore
+	seen         *SeenStore
+	votes        *Store
+	modelPath    string
+	rankPath     string
+	model        Model
+	ranked       []Item
+	notify       chan struct{}
+	maxPerSource int
+	maxPresents  int
+	maxAge       time.Duration
+	log          *slog.Logger
 }
 
-func newRanker(items *ItemStore, blocked *BlockStore, seen *SeenStore, votes *Store, modelPath, rankPath string, notify chan struct{}, log *slog.Logger) (*Ranker, error) {
+func newRanker(items *ItemStore, blocked *BlockStore, seen *SeenStore, votes *Store, modelPath, rankPath string, notify chan struct{}, maxPerSource, maxPresents int, maxAge time.Duration, log *slog.Logger) (*Ranker, error) {
 	r := &Ranker{
 		items:     items,
 		blocked:   blocked,
@@ -60,8 +67,11 @@ func newRanker(items *ItemStore, blocked *BlockStore, seen *SeenStore, votes *St
 			Sources: make(map[string]float64),
 			Tokens:  make(map[string]float64),
 		},
-		notify: notify,
-		log:    log,
+		notify:       notify,
+		maxPerSource: maxPerSource,
+		maxPresents:  maxPresents,
+		maxAge:       maxAge,
+		log:          log,
 	}
 	b, err := os.ReadFile(modelPath)
 	switch {
@@ -180,18 +190,47 @@ func (r *Ranker) score(it Item) float64 {
 		}
 		s += 0.5 * sum / float64(len(tokens))
 	}
-	if t, err := time.Parse(time.RFC3339, it.FetchedAt); err == nil {
+	if t, err := time.Parse(time.RFC3339, it.PublishedAt); err == nil {
 		age := time.Since(t).Hours()
 		if age < 0 {
 			age = 0
 		}
 		s += 0.15 * math.Exp(-age/48) // ~2 day half-life
+	} else if t, err := time.Parse(time.RFC3339, it.FetchedAt); err == nil {
+		age := time.Since(t).Hours()
+		if age < 0 {
+			age = 0
+		}
+		s += 0.15 * math.Exp(-age/48)
 	}
 	return s
 }
 
+// dayJitter returns a deterministic pseudo-random value in [-0.1, 0.1]
+// for an item, stable within a day and different across days. It keeps
+// the feed from being a pure function of the model without reshuffling
+// mid-session.
+func dayJitter(id string) float64 {
+	seed := sha256.Sum256([]byte(id + time.Now().UTC().Format("2006-01-02")))
+	v := float64(binary.BigEndian.Uint64(seed[:8])) / float64(math.MaxUint64)
+	return (v - 0.5) * 0.2
+}
+
+// expired reports whether an item should be ignored: presented too many
+// times without a reaction, or in the feed for too long.
+func (r *Ranker) expired(it Item) bool {
+	if r.seen.Count(it.ID) >= r.maxPresents {
+		return true
+	}
+	if t, err := time.Parse(time.RFC3339, it.FetchedAt); err == nil && time.Since(t) > r.maxAge {
+		return true
+	}
+	return false
+}
+
 // rank recomputes the relevance ordering and persists it to rank.json.
-// Seen/liked items sink below fresh content.
+// Layout: fresh (diversified by source) → revisits → liked content;
+// expired items are excluded entirely.
 func (r *Ranker) rank() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -201,42 +240,96 @@ func (r *Ranker) rank() {
 		s  float64
 	}
 	fresh := make([]scored, 0)
+	revisits := make([]scored, 0)
 	consumed := make([]Item, 0)
 	for _, it := range r.items.All() {
-		if r.votes.Vote(it.ID) == 1 || r.seen.Has(it.ID) {
+		if r.expired(it) {
+			continue
+		}
+		if r.votes.Vote(it.ID) == 1 {
 			consumed = append(consumed, it)
+			continue
+		}
+		sc := scored{it, r.score(it) + dayJitter(it.ID)}
+		if r.seen.Count(it.ID) > 0 {
+			revisits = append(revisits, sc)
 		} else {
-			fresh = append(fresh, scored{it, r.score(it)})
+			fresh = append(fresh, sc)
 		}
 	}
-	sort.SliceStable(fresh, func(i, j int) bool {
-		if fresh[i].s != fresh[j].s {
-			return fresh[i].s > fresh[j].s
+
+	byScore := func(a, b scored) bool {
+		if a.s != b.s {
+			return a.s > b.s
 		}
-		return fresh[i].it.FetchedAt > fresh[j].it.FetchedAt
-	})
+		return a.it.FetchedAt > b.it.FetchedAt
+	}
+	sort.SliceStable(fresh, func(i, j int) bool { return byScore(fresh[i], fresh[j]) })
+	sort.SliceStable(revisits, func(i, j int) bool { return byScore(revisits[i], revisits[j]) })
 	sort.SliceStable(consumed, func(i, j int) bool {
 		return consumed[i].FetchedAt > consumed[j].FetchedAt
 	})
 
-	r.ranked = make([]Item, 0, len(fresh)+len(consumed))
-	entries := make([]rankEntry, 0, len(fresh)+len(consumed))
-	for _, sc := range fresh {
-		r.ranked = append(r.ranked, sc.it)
+	diversify := func(items []scored, maxPerSource int) (diversified, overflow []scored) {
+		grouped := make(map[string][]scored)
+		var srcOrder []string
+		for _, sc := range items {
+			g, ok := grouped[sc.it.SourceName]
+			if !ok {
+				srcOrder = append(srcOrder, sc.it.SourceName)
+			}
+			grouped[sc.it.SourceName] = append(g, sc)
+		}
+		for i := 0; i < maxPerSource; i++ {
+			for _, src := range srcOrder {
+				g := grouped[src]
+				if i < len(g) {
+					diversified = append(diversified, g[i])
+				}
+			}
+		}
+		for _, src := range srcOrder {
+			g := grouped[src]
+			for i := maxPerSource; i < len(g); i++ {
+				overflow = append(overflow, g[i])
+			}
+		}
+		sort.SliceStable(overflow, func(i, j int) bool { return byScore(overflow[i], overflow[j]) })
+		return diversified, overflow
+	}
+
+	r.ranked = make([]Item, 0, len(fresh)+len(revisits)+len(consumed))
+	entries := make([]rankEntry, 0, len(r.ranked))
+	appendRanked := func(it Item, s float64) {
+		r.ranked = append(r.ranked, it)
 		entries = append(entries, rankEntry{
-			ID:    sc.it.ID,
-			Score: math.Round(sc.s*1000) / 1000,
-			Title: sc.it.Title,
+			ID:    it.ID,
+			Score: math.Round(s*1000) / 1000,
+			Title: it.Title,
 		})
 	}
+
+	// Diversify: interleave sources so no source leads with more than
+	// maxPerSource articles. Overflow of a source lands after the
+	// diversified block (still above revisits).
+	diversified, overflow := diversify(fresh, r.maxPerSource)
+	for _, sc := range diversified {
+		appendRanked(sc.it, sc.s)
+	}
+	for _, sc := range overflow {
+		appendRanked(sc.it, sc.s)
+	}
+	for _, sc := range revisits {
+		appendRanked(sc.it, sc.s)
+	}
 	for _, it := range consumed {
-		r.ranked = append(r.ranked, it)
-		entries = append(entries, rankEntry{ID: it.ID, Score: 0, Title: it.Title})
+		appendRanked(it, 0)
 	}
 
 	b, err := json.MarshalIndent(map[string]any{
 		"updatedAt": time.Now().UTC().Format(time.RFC3339),
 		"fresh":     len(fresh),
+		"revisits":  len(revisits),
 		"consumed":  len(consumed),
 		"order":     entries,
 	}, "", "  ")

@@ -39,6 +39,9 @@ func main() {
 		pushThreshold = flag.Float64("push-threshold", 0.3, "rank threshold for push notifications (default policy)")
 		notifyAge     = flag.Duration("notify-age", 48*time.Hour, "max item age eligible for push notifications")
 		vapidSubject  = flag.String("vapid-subject", "mailto:admin@localhost", "VAPID JWT subject (an email or URL)")
+		maxPerSource  = flag.Int("max-per-source", 4, "max articles from one source in the diversified top of the feed")
+		maxPresents   = flag.Int("max-presents", 3, "presentations without reaction before an article is ignored")
+		maxAge        = flag.Duration("max-age", 120*time.Hour, "time in the feed before an article is ignored")
 		genVapid      = flag.Bool("gen-vapid", false, "print a VAPID key pair and exit")
 		genToken      = flag.String("gen-token", "", "create an access token with the given name, print it once, and exit")
 	)
@@ -80,6 +83,9 @@ func main() {
 		pushThreshold: *pushThreshold,
 		notifyAge:     *notifyAge,
 		vapidSubject:  *vapidSubject,
+		maxPerSource:  *maxPerSource,
+		maxPresents:   *maxPresents,
+		maxAge:        *maxAge,
 		log:           logger,
 	})
 	if err != nil {

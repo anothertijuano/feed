@@ -16,7 +16,11 @@ type Item struct {
 	Paragraphs   []string `json:"paragraphs,omitempty"`
 	Subscription string   `json:"subscription"`
 	GUID         string   `json:"guid,omitempty"`
-	FetchedAt    string   `json:"fetchedAt"`
+	// FetchedAt is when the item entered the feed (used for expiration).
+	FetchedAt string `json:"fetchedAt"`
+	// PublishedAt is the article's own publication date, when the feed
+	// provides one (used for the recency score).
+	PublishedAt string `json:"publishedAt,omitempty"`
 }
 
 // viewItem is an Item annotated with the user's current interaction state.

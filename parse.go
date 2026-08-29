@@ -409,9 +409,9 @@ func itemFromEntry(subID string, e feedEntry, fetchedAt time.Time) (Item, bool) 
 	if title == "" {
 		title = "(untitled)"
 	}
-	ts := fetchedAt
+	publishedAt := ""
 	if t, ok := parseAnyTime(e.Published); ok {
-		ts = t
+		publishedAt = t.UTC().Format(time.RFC3339)
 	}
 	content := e.ContentHTML
 	if content == "" {
@@ -426,6 +426,7 @@ func itemFromEntry(subID string, e feedEntry, fetchedAt time.Time) (Item, bool) 
 		Paragraphs:   paragraphsFrom(content),
 		Subscription: subID,
 		GUID:         e.ID,
-		FetchedAt:    ts.UTC().Format(time.RFC3339),
+		FetchedAt:    fetchedAt.UTC().Format(time.RFC3339),
+		PublishedAt:  publishedAt,
 	}, true
 }

@@ -153,12 +153,14 @@ func (a *api) postInteraction(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusInternalServerError, err.Error())
 				return
 			}
+			_ = a.seen.Remove(req.Key) // a reaction: stop counting presentations
 			a.ranker.Like(req.Key)
 		case -1:
 			if err := a.store.SetVote(req.Key, 0); err != nil {
 				writeError(w, http.StatusInternalServerError, err.Error())
 				return
 			}
+			_ = a.seen.Remove(req.Key)
 			// Remove any memo mirrored to Memos before clearing the save
 			// state (which forgets the memo resource name).
 			a.memos.DeleteOnUnsave(req.Key)
@@ -172,19 +174,7 @@ func (a *api) postInteraction(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusInternalServerError, err.Error())
 				return
 			}
-		}
-	case "seen":
-		var b bool
-		if err := json.Unmarshal(req.Value, &b); err != nil {
-			writeError(w, http.StatusBadRequest, "seen value must be true")
-			return
-		}
-		if b {
-			if err := a.seen.Add(req.Key); err != nil {
-				writeError(w, http.StatusInternalServerError, err.Error())
-				return
-			}
-			a.ranker.nudge()
+			_ = a.seen.Remove(req.Key)
 		}
 	case "save":
 		var b bool
@@ -192,6 +182,7 @@ func (a *api) postInteraction(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "save value must be true or false")
 			return
 		}
+		_ = a.seen.Remove(req.Key) // a reaction: stop counting presentations
 		if b {
 			if err := a.store.SetSaved(req.Key, true); err != nil {
 				writeError(w, http.StatusInternalServerError, err.Error())
@@ -209,8 +200,21 @@ func (a *api) postInteraction(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+	case "seen":
+		var b bool
+		if err := json.Unmarshal(req.Value, &b); err != nil {
+			writeError(w, http.StatusBadRequest, "seen value must be true")
+			return
+		}
+		if b {
+			if err := a.seen.Add(req.Key); err != nil {
+				writeError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			a.ranker.nudge()
+		}
 	default:
-		writeError(w, http.StatusBadRequest, `kind must be "vote" or "save"`)
+		writeError(w, http.StatusBadRequest, `kind must be "vote", "save" or "seen"`)
 		return
 	}
 

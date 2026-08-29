@@ -86,6 +86,9 @@ ranking. Pull down at the top of the feed (or tap ↻) to refresh.
 | `-htpasswd` | *(empty)* | htpasswd file → enables HTTP Basic auth |
 | `-push-threshold` | `0.3` | rank threshold for push notifications |
 | `-notify-age` | `48h` | max article age eligible for notifications |
+| `-max-per-source` | `4` | max articles from one source in the diversified top of the feed |
+| `-max-presents` | `3` | presentations without a reaction before an article is ignored |
+| `-max-age` | `120h` | time in the feed before an article is ignored |
 | `-vapid-subject` | `mailto:admin@localhost` | VAPID subject (your email/URL) |
 | `-gen-vapid` | *(flag)* | print a VAPID key pair and exit |
 | `-gen-token` | *(flag)* | create an access token with the given name, print it once, and exit |

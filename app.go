@@ -19,11 +19,25 @@ type appOptions struct {
 	pushThreshold float64
 	notifyAge     time.Duration
 	vapidSubject  string
+	maxPerSource  int
+	maxPresents   int
+	maxAge        time.Duration
 	log           *slog.Logger
 }
 
 // newAPI builds the whole application: stores, workers and handlers.
 func newAPI(opts appOptions) (*api, error) {
+	// Sensible defaults for the ranking knobs (guards against zero values).
+	if opts.maxPerSource <= 0 {
+		opts.maxPerSource = 4
+	}
+	if opts.maxPresents <= 0 {
+		opts.maxPresents = 3
+	}
+	if opts.maxAge <= 0 {
+		opts.maxAge = 120 * time.Hour
+	}
+
 	dir := opts.dataDir
 	if err := os.MkdirAll(filepath.Join(dir, "items"), 0o755); err != nil {
 		return nil, err
@@ -85,7 +99,7 @@ func newAPI(opts appOptions) (*api, error) {
 
 	ranker, err := newRanker(items, blocked, seen, store,
 		filepath.Join(dir, "model.json"), filepath.Join(dir, "rank.json"),
-		notifyCh, opts.log)
+		notifyCh, opts.maxPerSource, opts.maxPresents, opts.maxAge, opts.log)
 	if err != nil {
 		return nil, err
 	}
