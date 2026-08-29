@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Feed
+GenericName=RSS Reader
+Comment=Read your self-hosted feed
+Exec=feed-gtk4
+Icon=com.anothertijuano.feed.Gtk4
+Terminal=false
+Categories=Network;News;GTK;
+StartupNotify=true

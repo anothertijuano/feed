@@ -9,6 +9,22 @@ permissions:
   contents: write
 
 jobs:
+  gtk4:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install GTK dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libgtk-4-dev libadwaita-1-dev libsoup-3.0-dev libjson-glib-dev meson ninja-build
+
+      - name: Configure
+        run: meson setup build
+        working-directory: clients/gtk4
+
+      - name: Build
+        run: ninja -C build
+        working-directory: clients/gtk4
+
   release:
     runs-on: ubuntu-latest
     steps:

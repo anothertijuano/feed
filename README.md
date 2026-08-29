@@ -168,6 +168,7 @@ a `UserName` key.
 | Web PWA (built-in) | `frontend/` | served by the server at `/`; installable on iOS/macOS/Android |
 | macOS / iOS native | [`clients/universal/`](clients/universal/README.md) | SwiftUI, shared codebase; macOS builds with SwiftPM, iOS via the bundled Xcode project |
 | Terminal (TUI) | [`clients/tui/`](clients/tui/README.md) | Go + Bubble Tea; runs on macOS and Linux |
+| GTK4 (Linux) | [`clients/gtk4/`](clients/gtk4/README.md) | C + GTK4/libadwaita, meson build; GNOME-native |
 | Sailfish OS | [`clients/sailfish/`](clients/sailfish/README.md) | pure QML Silica app for Jolla phones |
 
 All clients talk to the same [API](docs/API.md) and authenticate with a
