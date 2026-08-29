@@ -55,7 +55,7 @@ static void subs_view_reload_internal(SubsView *self);
 static void subs_view_add(SubsView *self, const char *url);
 static void on_policy_done(FeedApiResponse *response, gpointer data);
 static void on_delete_done(FeedApiResponse *response, gpointer data);
-static void on_delete_chosen(AdwMessageDialog *dialog, GAsyncResult *result,
+static void on_delete_chosen(GObject *source_object, GAsyncResult *result,
                              gpointer data);
 
 /* ---------- helpers ---------- */
