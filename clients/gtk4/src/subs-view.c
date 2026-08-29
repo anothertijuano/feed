@@ -260,7 +260,7 @@ subs_view_rebuild(SubsView *self, JsonNode *root)
 
     GtkWidget *row_widget = adw_action_row_new();
     g_object_set_data_full(G_OBJECT(row_widget), "sub", row, sub_row_free);
-    adw_action_row_set_title(ADW_ACTION_ROW(row_widget), display_title);
+    adw_preferences_row_set_title(ADW_PREFERENCES_ROW(row_widget), display_title);
     if (row->url != NULL && row->url[0] != '\0')
       adw_action_row_set_subtitle(ADW_ACTION_ROW(row_widget), row->url);
     adw_action_row_set_icon_name(ADW_ACTION_ROW(row_widget),
