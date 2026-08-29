@@ -1,6 +1,6 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
-import Qt.labs.settings 1.0
+import Nemo.Configuration 1.0
 import "js/api.js" as Api
 import "pages"
 import "cover"
@@ -14,11 +14,12 @@ ApplicationWindow {
     initialPage: Component { FeedPage { app: app } }
     cover: Component { CoverPage { } }
 
-    // Configuration lives here (persisted) and is mirrored into the
+    // Configuration lives here (persisted via Nemo.Configuration, the
+    // standard Sailfish settings backend) and is mirrored into the
     // shared api.js library so every page sees the same connection.
-    Settings {
+    ConfigurationGroup {
         id: cfg
-        category: "harbour-feed"
+        path: "/apps/harbour-feed"
         property string server: ""
         property string token: ""
     }

@@ -18,7 +18,8 @@ policy, saved list, pull-to-refresh, and an app cover.
 - **Saved** — everything you bookmarked, newest first.
 - **Subscriptions** — add RSS/Atom/JSON feeds, remove, and set the push
   notification policy per feed (`always` / `default` / `never`).
-- **Settings** — server URL + access token (persisted), test connection.
+- **Settings** — server URL + access token (persisted via
+  `Nemo.Configuration`), test connection.
 
 ## Prerequisites
 
@@ -52,6 +53,31 @@ scp -r qml defaultuser@10.0.1.102:/home/defaultuser/feed-qml
 ssh defaultuser@10.0.1.102
 # on the device:
 sailfish-qml /home/defaultuser/feed-qml/qml/harbour-feed.qml
+```
+
+## Manual install (no SDK)
+
+You can install the app onto the device without an RPM (the phone keeps
+it across reboots, but a system update may wipe it):
+
+```sh
+# from clients/sailfish, with developer-mode SSH to the phone:
+scp -r qml icons harbour-feed.sh harbour-feed.desktop \
+    defaultuser@10.0.1.102:/home/defaultuser/feed-qml/
+ssh defaultuser@10.0.1.102
+# on the device:
+echo '<dev-mode-password>' | devel-su sh -c '
+  rm -rf /usr/share/harbour-feed
+  mkdir -p /usr/share/harbour-feed
+  cp -r /home/defaultuser/feed-qml/qml /usr/share/harbour-feed/qml
+  cp /home/defaultuser/feed-qml/harbour-feed.sh /usr/bin/harbour-feed
+  chmod 0755 /usr/bin/harbour-feed
+  cp /home/defaultuser/feed-qml/harbour-feed.desktop /usr/share/applications/harbour-feed.desktop
+  for s in 86x86 108x108 128x128 172x172 256x256; do
+    mkdir -p /usr/share/icons/hicolor/$s/apps
+    cp /home/defaultuser/feed-qml/icons/$s.png /usr/share/icons/hicolor/$s/apps/harbour-feed.png
+  done'
+systemctl --user restart lipstick   # pick up the new launcher entry
 ```
 
 ## Layout
