@@ -1,7 +1,7 @@
 /* feed. — service worker: app-shell caching + push notifications. */
 'use strict';
 
-const VERSION = 'v2';
+const VERSION = 'v3';
 const CACHE = `feed-${VERSION}`;
 const SHELL = ['/', '/index.html', '/styles.css', '/app.js', '/manifest.json',
   '/icons/icon-192.png', '/icons/icon-512.png', '/icons/apple-touch-icon.png',
