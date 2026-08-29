@@ -73,8 +73,18 @@ func (a *api) routes() http.Handler {
 	mux.HandleFunc("POST /api/tokens", a.postToken)
 	mux.HandleFunc("DELETE /api/tokens/{id}", a.deleteToken)
 
-	mux.Handle("/", http.FileServerFS(frontendFS))
+	mux.Handle("/", noCache(http.FileServerFS(frontendFS)))
 	return mux
+}
+
+// noCache marks a response as non-cacheable by browsers and edge caches
+// (Cloudflare, …). Updates to the self-hosted UI must propagate
+// immediately; ETags/Last-Modified still make revalidation cheap.
+func noCache(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
+		next.ServeHTTP(w, r)
+	})
 }
 
 /* ---------- feed / saved ---------- */

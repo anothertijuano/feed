@@ -3,7 +3,7 @@
 
 const VERSION = 'v3';
 const CACHE = `feed-${VERSION}`;
-const SHELL = ['/', '/index.html', '/styles.css', '/app.js', '/manifest.json',
+const SHELL = ['/', '/index.html', '/styles.css?v=3', '/app.js?v=3', '/manifest.json',
   '/icons/icon-192.png', '/icons/icon-512.png', '/icons/apple-touch-icon.png',
   '/icons/favicon.svg', '/icons/favicon.ico'];
 
