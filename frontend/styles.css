@@ -1,5 +1,11 @@
 /* feed. — clean, mobile-first feed UI (Instagram-like scrolling) */
 
+/* The hidden attribute must always win over display rules below
+   (e.g. .login's display:flex) — otherwise overlays never hide. */
+[hidden] {
+  display: none !important;
+}
+
 :root {
   color-scheme: light dark;
 
