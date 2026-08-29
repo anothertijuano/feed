@@ -152,8 +152,11 @@ removable volumes per binary (TCC): a launchd job opening files on an
 external drive can block or be denied silently — for a server, keep both
 `-data` and `-htpasswd` on the internal disk. When upgrading the binary,
 replace it via `rm` + copy (or temp file + `mv`), never by overwriting it
-in place while the service is running. To run before login instead,
-install the plist in `/Library/LaunchDaemons/` with a `UserName` key.
+in place while the service is running — and run it once manually (e.g.
+`feed -gen-vapid`) before restarting the service, so Gatekeeper's
+first-launch assessment doesn't kill the launchd-spawned process. To run
+before login instead, install the plist in `/Library/LaunchDaemons/` with
+a `UserName` key.
 
 ## For developers
 
