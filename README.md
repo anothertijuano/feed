@@ -161,6 +161,18 @@ first-launch assessment doesn't kill the launchd-spawned process. To run
 before login instead, install the plist in `/Library/LaunchDaemons/` with
 a `UserName` key.
 
+## Clients
+
+| Client | Location | Notes |
+| --- | --- | --- |
+| Web PWA (built-in) | `frontend/` | served by the server at `/`; installable on iOS/macOS/Android |
+| macOS / iOS native | [`clients/universal/`](clients/universal/README.md) | SwiftUI, shared codebase; macOS builds with SwiftPM, iOS via the bundled Xcode project |
+| Terminal (TUI) | [`clients/tui/`](clients/tui/README.md) | Go + Bubble Tea; runs on macOS and Linux |
+| Sailfish OS | [`clients/sailfish/`](clients/sailfish/README.md) | pure QML Silica app for Jolla phones |
+
+All clients talk to the same [API](docs/API.md) and authenticate with a
+per-client access token.
+
 ## For developers
 
 - [API reference](docs/API.md) — endpoints for third-party clients
@@ -169,6 +181,7 @@ a `UserName` key.
 ```sh
 make test    # run the test suite
 make run     # serve on :8000 with data in ./data
+make tui     # build the TUI client into clients/tui/feedtui
 ```
 
 Frontend assets are embedded at build time — restart to pick up changes.

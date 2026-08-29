@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+X-Nemo-Application-Type=silica-qt5
+Icon=harbour-feed
+Exec=harbour-feed
+Name=feed.
+Comment=Self-hosted ranked feed reader

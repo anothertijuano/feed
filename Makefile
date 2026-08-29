@@ -19,6 +19,12 @@ linux-amd64:
 linux-arm64:
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN)-linux-arm64 .
 
+tui:
+	cd clients/tui && CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o feedtui .
+
+tui-test:
+	cd clients/tui && go test ./...
+
 test:
 	go test ./...
 
