@@ -44,15 +44,13 @@ jobs:
         env:
           CGO_ENABLED: "0"
         run: |
-          set -x
-          pwd
           GOOS=linux   GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o feed-linux-amd64  .
           GOOS=darwin  GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o feed-darwin-amd64 .
           (cd clients/tui &&
-             GOOS=linux   GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ../feedtui-linux-amd64   . &&
-             GOOS=linux   GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o ../feedtui-linux-arm64   . &&
-             GOOS=darwin  GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ../feedtui-darwin-amd64  . &&
-             GOOS=darwin  GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o ../feedtui-darwin-arm64  .)
+             GOOS=linux   GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ../../feedtui-linux-amd64   . &&
+             GOOS=linux   GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o ../../feedtui-linux-arm64   . &&
+             GOOS=darwin  GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ../../feedtui-darwin-amd64  . &&
+             GOOS=darwin  GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o ../../feedtui-darwin-arm64  .)
           pwd
           ls -lh feed-linux-amd64 feed-darwin-amd64 feedtui-*
           sha256sum feed-linux-amd64 feed-darwin-amd64 feedtui-linux-amd64 feedtui-linux-arm64 feedtui-darwin-amd64 feedtui-darwin-arm64 > SHA256SUMS
