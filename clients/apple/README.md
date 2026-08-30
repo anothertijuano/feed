@@ -1,11 +1,11 @@
-# Feed — native clients for feed2
+# Feed — native client for Apple platforms (macOS & iOS)
 
 A single SwiftUI codebase that runs as a **macOS app** (via Swift Package Manager) and an **iOS app** (via an Xcode project), sharing all source files. Both talk to a self-hosted [feed2](https://github.com/microbito/feed2) server over its JSON API.
 
 ## Layout
 
 ```
-clients/universal/
+clients/apple/
 ├── Package.swift            # SwiftPM manifest: FeedCore library + FeedApp executable
 ├── Sources/
 │   ├── FeedCore/            # Shared library (no UI dependencies)
@@ -40,7 +40,7 @@ clients/universal/
 Requirements: Xcode Command Line Tools with Swift 6 (or a full Xcode install).
 
 ```sh
-cd clients/universal
+cd clients/apple
 swift build          # builds FeedCore and FeedApp
 swift run FeedApp    # launches the app
 ```
