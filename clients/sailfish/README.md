@@ -58,11 +58,16 @@ sailfish-qml /home/defaultuser/feed-qml/qml/harbour-feed.qml
 ## Manual install (no SDK)
 
 You can install the app onto the device without an RPM (the phone keeps
-it across reboots, but a system update may wipe it):
+it across reboots, but a system update may wipe it). The launcher must be
+a real ELF binary — a shell script works when run by hand but the
+lipstick launcher does not start it:
 
 ```sh
 # from clients/sailfish, with developer-mode SSH to the phone:
-scp -r qml icons harbour-feed.sh harbour-feed.desktop \
+cd launcher
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o harbour-feed .
+cd ..
+scp -r qml icons harbour-feed.desktop launcher/harbour-feed \
     defaultuser@10.0.1.102:/home/defaultuser/feed-qml/
 ssh defaultuser@10.0.1.102
 # on the device:
@@ -70,7 +75,7 @@ echo '<dev-mode-password>' | devel-su sh -c '
   rm -rf /usr/share/harbour-feed
   mkdir -p /usr/share/harbour-feed
   cp -r /home/defaultuser/feed-qml/qml /usr/share/harbour-feed/qml
-  cp /home/defaultuser/feed-qml/harbour-feed.sh /usr/bin/harbour-feed
+  cp /home/defaultuser/feed-qml/harbour-feed /usr/bin/harbour-feed
   chmod 0755 /usr/bin/harbour-feed
   cp /home/defaultuser/feed-qml/harbour-feed.desktop /usr/share/applications/harbour-feed.desktop
   for s in 86x86 108x108 128x128 172x172 256x256; do
@@ -79,6 +84,8 @@ echo '<dev-mode-password>' | devel-su sh -c '
   done'
 systemctl --user restart lipstick   # pick up the new launcher entry
 ```
+
+The launcher appends its log to `/tmp/harbour-feed.log` on the phone.
 
 ## Layout
 
