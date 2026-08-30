@@ -10,6 +10,11 @@ import (
 
 func newTestRanker(t *testing.T) (*Ranker, *ItemStore, *BlockStore, string) {
 	t.Helper()
+	// Ordering tests assert model relevance, not the day-seeded ordering
+	// noise; disable the jitter so ranks are deterministic.
+	oldJitter := jitter
+	jitter = func(string) float64 { return 0 }
+	t.Cleanup(func() { jitter = oldJitter })
 	dir := t.TempDir()
 	items, err := OpenItemStore(filepath.Join(dir, "items"))
 	if err != nil {
@@ -251,6 +256,13 @@ func TestRankerOrdersByRelevance(t *testing.T) {
 	putTestItem(t, items, "disliked", "AI hype", "https://ai.example.com/b")
 	r.Like("liked")
 	r.Dislike("disliked")
+	// Drop the training item so only the fresh items compete below: the
+	// disliked one is already removed by Dislike, and leaving "liked" in
+	// would put two rust-source items in the fresh pool, letting the
+	// per-source diversity interleave push the AI item between them.
+	if err := items.Delete("liked"); err != nil {
+		t.Fatal(err)
+	}
 
 	// Fresh items from both sources.
 	putTestItem(t, items, "fresh-rust", "Rust for beginners", "https://rust.example.com/c")

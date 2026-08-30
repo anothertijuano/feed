@@ -206,15 +206,19 @@ func (r *Ranker) score(it Item) float64 {
 	return s
 }
 
-// dayJitter returns a deterministic pseudo-random value in [-0.1, 0.1]
+// dayJitterImpl returns a deterministic pseudo-random value in [-0.1, 0.1]
 // for an item, stable within a day and different across days. It keeps
 // the feed from being a pure function of the model without reshuffling
-// mid-session.
-func dayJitter(id string) float64 {
+// content every rank.
+func dayJitterImpl(id string) float64 {
 	seed := sha256.Sum256([]byte(id + time.Now().UTC().Format("2006-01-02")))
 	v := float64(binary.BigEndian.Uint64(seed[:8])) / float64(math.MaxUint64)
 	return (v - 0.5) * 0.2
 }
+
+// jitter is the per-item ordering noise applied on top of the model score.
+// It is a variable so tests can disable it and assert deterministic order.
+var jitter = dayJitterImpl
 
 // expired reports whether an item should be ignored: presented too many
 // times without a reaction, or in the feed for too long.
@@ -250,7 +254,7 @@ func (r *Ranker) rank() {
 			consumed = append(consumed, it)
 			continue
 		}
-		sc := scored{it, r.score(it) + dayJitter(it.ID)}
+		sc := scored{it, r.score(it) + jitter(it.ID)}
 		if r.seen.Count(it.ID) > 0 {
 			revisits = append(revisits, sc)
 		} else {
