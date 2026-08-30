@@ -8,3 +8,6 @@ DerivedData/
 
 # macOS
 .DS_Store
+
+# SwiftPM/Xcode workspace metadata
+.swiftpm/
